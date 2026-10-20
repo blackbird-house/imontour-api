@@ -13,7 +13,7 @@
     "test": "vitest run",
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
-    "token": "tsx scripts/token.ts",
+    "token": "node --env-file-if-exists=.env --import tsx scripts/token.ts",
     "openapi": "tsx scripts/generate-openapi.ts",
     "openapi:check": "tsx scripts/generate-openapi.ts --check",
     "migrate": "tsx scripts/migrate.ts"
