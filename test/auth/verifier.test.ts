@@ -73,6 +73,10 @@ describe('createVerifier (JWKS mode)', () => {
     await expect(verify(await signToken(kp, { exp: now() - 90 }))).rejects.toBeInstanceOf(UnauthorizedError)
   })
 
+  it('rejects a token without exp', async () => {
+    await expect(verify(await signToken(kp, { exp: null }))).rejects.toBeInstanceOf(UnauthorizedError)
+  })
+
   it('rejects a missing sub', async () => {
     await expect(verify(await signToken(kp, { sub: null }))).rejects.toBeInstanceOf(UnauthorizedError)
   })
@@ -97,6 +101,10 @@ describe('createVerifier (secret mode)', () => {
 
   it('rejects an HS256 token with the wrong secret', async () => {
     await expect(secretVerify(await signHs256('x'.repeat(40)))).rejects.toBeInstanceOf(UnauthorizedError)
+  })
+
+  it('rejects an HS256 token without exp', async () => {
+    await expect(secretVerify(await signHs256(secret, { exp: null }))).rejects.toBeInstanceOf(UnauthorizedError)
   })
 
   it('rejects an ES256 token', async () => {

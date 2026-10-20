@@ -9,7 +9,7 @@ const ASYMMETRIC_ALGS = ['ES256', 'RS256', 'EdDSA']
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export function createVerifier(auth: AuthConfig, keys?: JWTVerifyGetKey): VerifyToken {
-  const common = { issuer: auth.issuer, audience: auth.audience, clockTolerance: 60 }
+  const common = { issuer: auth.issuer, audience: auth.audience, clockTolerance: 60, requiredClaims: ['exp', 'sub'] }
 
   let resolveKey: JWTVerifyGetKey | undefined = keys
   let algorithms = ASYMMETRIC_ALGS

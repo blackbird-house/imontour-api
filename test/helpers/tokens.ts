@@ -19,7 +19,7 @@ export type TokenClaims = {
   iss?: string
   aud?: string
   /** Absolute expiry, seconds since epoch. Defaults to now + 1h. */
-  exp?: number
+  exp?: number | null
 }
 
 let counter = 0
@@ -38,24 +38,24 @@ function payloadFor(claims: TokenClaims) {
 
 export async function signToken(keyPair: TestKeyPair, claims: TokenClaims = {}): Promise<string> {
   const now = Math.floor(Date.now() / 1000)
-  return new SignJWT(payloadFor(claims))
+  const jwt = new SignJWT(payloadFor(claims))
     .setProtectedHeader({ alg: 'ES256', kid: keyPair.kid })
     .setIssuer(claims.iss ?? TEST_ISSUER)
     .setAudience(claims.aud ?? TEST_AUDIENCE)
     .setIssuedAt(now - 10)
-    .setExpirationTime(claims.exp ?? now + 3600)
-    .sign(keyPair.privateKey)
+  if (claims.exp !== null) jwt.setExpirationTime(claims.exp ?? now + 3600)
+  return jwt.sign(keyPair.privateKey)
 }
 
 export async function signHs256(secret: string, claims: TokenClaims = {}): Promise<string> {
   const now = Math.floor(Date.now() / 1000)
-  return new SignJWT(payloadFor(claims))
+  const jwt = new SignJWT(payloadFor(claims))
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuer(claims.iss ?? TEST_ISSUER)
     .setAudience(claims.aud ?? TEST_AUDIENCE)
     .setIssuedAt(now - 10)
-    .setExpirationTime(claims.exp ?? now + 3600)
-    .sign(new TextEncoder().encode(secret))
+  if (claims.exp !== null) jwt.setExpirationTime(claims.exp ?? now + 3600)
+  return jwt.sign(new TextEncoder().encode(secret))
 }
 
 export function signUnsecured(claims: TokenClaims = {}): string {
