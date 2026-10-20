@@ -1,4 +1,6 @@
 import { serve } from '@hono/node-server'
+import { Hono } from 'hono'
+import { logger } from 'hono/logger'
 import { createApp } from './app.js'
 import { ensureLocalKeyFile } from './auth/localKeys.js'
 import { createDb, runMigrations } from './db/client.js'
@@ -16,7 +18,9 @@ async function main(): Promise<void> {
   }
   // Deployed environments never migrate at startup: run `npm run migrate` before deploying.
 
-  const app = createApp(buildDeps(config, db))
+  const api = createApp(buildDeps(config, db))
+  // Request logging is local-only; deployed environments use Vercel's own logs.
+  const app = config.appEnv === 'local' ? new Hono().use(logger()).route('/', api) : api
   const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
     console.log(`imontour-api listening on :${info.port} (${config.appEnv})`)
   })
