@@ -47,15 +47,40 @@ describe('OpenAPI document', () => {
     expect(Object.keys(doc.paths['/v1/trips/{id}']).sort()).toEqual(['delete', 'get', 'patch', 'put'])
   })
 
-  it('documents PUT with a required-in-practice If-Match and all error responses', () => {
+  it('documents PUT with a required If-Match and all error responses', () => {
     const put = doc.paths['/v1/trips/{id}'].put as Json
-    const names = (put.parameters as Json[]).map((p) => p.name)
-    expect(names).toContain('If-Match')
+    const ifMatch = (put.parameters as Json[]).find((p) => p.name === 'If-Match')
+    expect(ifMatch).toMatchObject({ in: 'header', required: true })
     expect(Object.keys(put.responses)).toEqual(
       expect.arrayContaining(['200', '400', '401', '404', '412', '413', '422', '428']),
     )
     expect(put.description).toMatch(/If-Match.*required/i)
     expect(put.responses['200'].headers.ETag).toBeDefined()
+  })
+
+  it('documents POST with one CreateTripBody schema (destinations optional, max 200)', () => {
+    const schema = doc.paths['/v1/trips'].post.requestBody.content['application/json'].schema as Json
+    expect(schema).toEqual({ $ref: '#/components/schemas/CreateTripBody' })
+    const body = doc.components.schemas.CreateTripBody as Json
+    expect(body.required ?? []).not.toContain('destinations')
+    expect(body.properties.destinations.maxItems).toBe(200)
+    expect(doc.components.schemas.NewTripNameOnly).toBeUndefined()
+    expect(doc.components.schemas.NewTripNameOnlyBody).toBeUndefined()
+  })
+
+  it('types schemaVersion as an integer enum [1]', () => {
+    for (const name of ['Trip', 'TripInput', 'CreateTripBody']) {
+      const sv = doc.components.schemas[name].properties.schemaVersion as Json
+      expect(sv.type, name).toBe('integer')
+      expect(sv.enum, name).toEqual([1])
+      expect(sv.description, name).toMatch(/above 1/)
+    }
+    expect(doc.components.schemas.TripInput.properties.schemaVersion.default).toBe(1)
+  })
+
+  it('tags operations Trips and Config', () => {
+    const tags = new Set(operations().flatMap(({ op }) => op.tags as string[]))
+    expect([...tags].sort()).toEqual(['Config', 'Trips'])
   })
 
   it('defines the bearerAuth scheme and applies it to trips only', () => {

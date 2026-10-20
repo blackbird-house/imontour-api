@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  newTripNameOnlySchema,
+  createTripBodySchema,
   renameSchema,
   tripInputSchema,
   tripSchema,
@@ -165,9 +165,12 @@ describe('other schemas', () => {
     expect(renameSchema.safeParse({ name: 'x' }).success).toBe(true)
   })
 
-  it('newTripNameOnlySchema allows name absent, null or string', () => {
-    expect(newTripNameOnlySchema.safeParse({}).success).toBe(true)
-    expect(newTripNameOnlySchema.safeParse({ name: null }).success).toBe(true)
-    expect(newTripNameOnlySchema.safeParse({ name: 'Trip' }).success).toBe(true)
+  it('createTripBodySchema makes destinations optional and keeps the 200 limit', () => {
+    expect(createTripBodySchema.safeParse({}).success).toBe(true)
+    expect(createTripBodySchema.safeParse({ name: null }).success).toBe(true)
+    expect(createTripBodySchema.parse({ id: tripId, name: 'Trip' })).toMatchObject({ id: tripId, schemaVersion: 1 })
+    expect(createTripBodySchema.safeParse({ destinations: Array.from({ length: 201 }, () => dest()) }).success).toBe(false)
+    expect(createTripBodySchema.safeParse({ schemaVersion: 2 }).success).toBe(false)
+    expect(createTripBodySchema.safeParse({ destinations: null }).success).toBe(false)
   })
 })

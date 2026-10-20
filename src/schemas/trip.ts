@@ -70,26 +70,40 @@ export const destinationSchema = z
 
 const nameField = text.nullish().openapi({ description: 'Trip name. May be empty or null.' })
 
-export const tripInputSchema = z
-  .object({
-    schemaVersion: z.literal(CURRENT_SCHEMA_VERSION).default(CURRENT_SCHEMA_VERSION),
-    id: z.uuid().optional(),
-    name: nameField,
-    destinations: z.array(destinationSchema).max(MAX_DESTINATIONS),
-  })
-  .openapi('TripInput')
+const schemaVersionDoc = {
+  type: 'integer' as const,
+  enum: [CURRENT_SCHEMA_VERSION],
+  description: `Document schema version. Only ${CURRENT_SCHEMA_VERSION} exists today; clients should treat a value above ${CURRENT_SCHEMA_VERSION} as unsupported.`,
+}
 
-export const newTripNameOnlySchema = z
-  .object({ name: nameField })
-  .openapi('NewTripNameOnly')
+const schemaVersionField = z.literal(CURRENT_SCHEMA_VERSION).openapi(schemaVersionDoc)
+
+const tripInputShape = {
+  schemaVersion: schemaVersionField
+    .default(CURRENT_SCHEMA_VERSION)
+    .openapi({ ...schemaVersionDoc, default: CURRENT_SCHEMA_VERSION }),
+  id: z.uuid().optional(),
+  name: nameField,
+  destinations: z.array(destinationSchema).max(MAX_DESTINATIONS),
+}
+
+export const tripInputSchema = z.object(tripInputShape).openapi('TripInput')
+
+/** POST body: a TripInput whose `destinations` may be absent (an empty trip). */
+export const createTripBodySchema = z
+  .object({ ...tripInputShape, destinations: tripInputShape.destinations.optional() })
+  .openapi('CreateTripBody', {
+    description:
+      'A trip to create. `id` and destination ids are kept when sent; an absent `destinations` creates an empty trip.',
+  })
 
 export const tripSchema = z
   .object({
-    schemaVersion: z.literal(CURRENT_SCHEMA_VERSION),
+    schemaVersion: schemaVersionField,
     id: z.uuid(),
     name: z.string().nullable(),
     revision: z.number().int().min(1),
-    updatedAt: z.iso.datetime().openapi({ example: '2026-10-20T09:00:00Z' }),
+    updatedAt: z.iso.datetime().openapi({ example: '2026-10-20T09:00:00.000Z' }),
     destinations: z.array(destinationSchema),
   })
   .openapi('Trip')

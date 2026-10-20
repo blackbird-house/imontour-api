@@ -52,7 +52,7 @@ const getConfig = createRoute({
   operationId: 'getConfig',
   method: 'get',
   path: '/config',
-  tags: ['config'],
+  tags: ['Config'],
   summary: 'Remote config (public)',
   description: 'No authentication. Clients revalidate with `If-None-Match`.',
   request: {

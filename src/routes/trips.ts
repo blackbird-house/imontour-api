@@ -9,18 +9,15 @@ import {
 } from '../errors.js'
 import { decodeCursor, encodeCursor } from '../http/cursor.js'
 import { formatEtag, parseIfMatch } from '../http/etag.js'
-import { validationHook } from '../http/validation.js'
 import { DuplicateTripError, type TripRepo, type WriteResult } from '../repo/trips.js'
 import {
-  CURRENT_SCHEMA_VERSION,
+  createTripBodySchema,
   errorSchema,
-  newTripNameOnlySchema,
   renameSchema,
   tripInputSchema,
   tripListSchema,
   tripSchema,
   type Trip,
-  type TripInput,
 } from '../schemas/trip.js'
 
 export type TripsApp = OpenAPIHono<{ Variables: AuthVariables }>
@@ -57,7 +54,13 @@ const ifMatchRequired = z.object({
   'If-Match': z
     .string()
     .optional()
-    .openapi({ description: 'Revision being replaced: `"3"` or `3`. Required; missing is 428.', example: '"3"' }),
+    // Optional to the validator, so a missing header reaches the handler and
+    // answers 428 instead of a 400; documented as required, which it is.
+    .openapi({
+      param: { required: true },
+      description: 'Revision being replaced: `"3"` or `3`. Required; missing is 428.',
+      example: '"3"',
+    }),
 })
 
 const ifMatchOptional = z.object({
@@ -66,29 +69,6 @@ const ifMatchOptional = z.object({
     .optional()
     .openapi({ description: 'Optional revision guard: `"3"` or `3`. Stale is 412.', example: '"3"' }),
 })
-
-/**
- * Name-only branch for POST validation: identical to NewTripNameOnly except a
- * `destinations` key is rejected, so the two union branches are mutually
- * exclusive and the validated value alone tells which one matched.
- */
-const nameOnlyBranch = newTripNameOnlySchema
-  .extend({
-    destinations: z
-      .unknown()
-      .refine((v) => v === undefined, 'must be absent for a name-only trip')
-      .optional()
-      .openapi({ description: 'Must be absent; a body with `destinations` is a full trip.' }),
-  })
-  .openapi('NewTripNameOnlyBody')
-
-const createTripBody = z
-  .union([tripInputSchema, nameOnlyBranch])
-  .openapi({
-    description:
-      'A body with a `destinations` key is a full trip (client `id` and destination ids are kept). ' +
-      'Otherwise it is name-only and creates an empty trip.',
-  })
 
 const preconditionFailedSchema = errorSchema
   .extend({ currentRevision: z.number().int().min(1) })
@@ -161,7 +141,7 @@ const createTrip = createRoute({
   method: 'post',
   path: '/v1/trips',
   summary: 'Create a trip (empty or full)',
-  request: { body: jsonBody(createTripBody, 'Name-only or full trip.') },
+  request: { body: jsonBody(createTripBodySchema, 'The trip; `{}` or no body creates an empty unnamed trip.') },
   responses: {
     201: {
       description: 'Created.',
@@ -200,8 +180,7 @@ const replaceTrip = createRoute({
   path: '/v1/trips/{id}',
   summary: 'Replace a trip (revision-checked)',
   description:
-    'Replaces the whole trip document. The `If-Match` header is REQUIRED: it is modelled as optional ' +
-    'in the schema only so that a missing header yields 428 instead of a 400 validation error. ' +
+    'Replaces the whole trip document. The `If-Match` header is required; a missing one yields 428. ' +
     'A stale revision yields 412 with `currentRevision`.',
   request: {
     params: idParams,
@@ -265,20 +244,6 @@ const deleteTrip = createRoute({
 // ---------------------------------------------------------------------------
 // Helpers
 
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v)
-}
-
-/**
- * POST body rule: a `destinations` key means a full trip; anything else is
- * name-only and creates an empty trip. Throws a ZodError (-> 422) on violation.
- */
-function parseCreateBody(raw: unknown): TripInput {
-  if (isRecord(raw) && 'destinations' in raw) return tripInputSchema.parse(raw)
-  const { name } = newTripNameOnlySchema.parse(raw)
-  return { schemaVersion: CURRENT_SCHEMA_VERSION, name, destinations: [] }
-}
-
 function expectedRevision(header: string | undefined, required: boolean): number | undefined {
   const parsed = parseIfMatch(header)
   if (parsed === 'invalid') throw badRequest('Malformed If-Match header')
@@ -307,32 +272,18 @@ export function registerTripRoutes(app: TripsApp, repo: TripRepo): void {
     return c.json({ items: page.items, nextCursor: page.nextCursor ? encodeCursor(page.nextCursor) : null }, 200)
   })
 
-  app.openapi(
-    createTrip,
-    async (c) => {
-      // Validated by the mutually exclusive union (a request with no body and no
-      // Content-Type validates as `{}`), so the raw body is never re-read here.
-      const body = c.req.valid('json')
-      const input: TripInput =
-        'destinations' in body && body.destinations !== undefined
-          ? (body as TripInput)
-          : { schemaVersion: CURRENT_SCHEMA_VERSION, name: body.name, destinations: [] }
-      let trip: Trip
-      try {
-        trip = await repo.create(c.get('userId'), input)
-      } catch (err) {
-        if (err instanceof DuplicateTripError) throw conflict('A trip with this id already exists')
-        throw err
-      }
-      return c.json(trip, 201, { ETag: formatEtag(trip.revision), Location: `/v1/trips/${trip.id}` })
-    },
-    (result) => {
-      // On failure, report the error of the branch the POST rule selects (the
-      // hook receives the raw input), so the message names the real failing path.
-      if (!result.success && result.target === 'json') parseCreateBody((result as { data?: unknown }).data)
-      validationHook(result)
-    },
-  )
+  app.openapi(createTrip, async (c) => {
+    // A request with no body and no Content-Type validates as `{}`.
+    const body = c.req.valid('json')
+    let trip: Trip
+    try {
+      trip = await repo.create(c.get('userId'), { ...body, destinations: body.destinations ?? [] })
+    } catch (err) {
+      if (err instanceof DuplicateTripError) throw conflict('A trip with this id already exists')
+      throw err
+    }
+    return c.json(trip, 201, { ETag: formatEtag(trip.revision), Location: `/v1/trips/${trip.id}` })
+  })
 
   app.openapi(getTrip, async (c) => {
     const trip = await repo.get(c.get('userId'), c.req.valid('param').id)

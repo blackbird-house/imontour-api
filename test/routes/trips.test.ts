@@ -140,10 +140,16 @@ describe('POST /v1/trips', () => {
     expect(trip).toMatchObject({ id, name: 'x', destinations: [] })
   })
 
-  it('ignores an id in a name-only body', async () => {
+  it('keeps the client id in a body without destinations (empty trip)', async () => {
     const id = randomUUID()
     const trip = await createTrip(USER_A, { id, name: 'no dests' })
-    expect(trip.id).not.toBe(id)
+    expect(trip).toMatchObject({ id, name: 'no dests', destinations: [] })
+  })
+
+  it('rejects schemaVersion 2 in a body without destinations with 422', async () => {
+    const res = await t.request('/v1/trips', { method: 'POST', as: USER_A, json: { schemaVersion: 2, name: 'x' } })
+    const b = await expectError(res, 422, 'unprocessable')
+    expect((b.error as Json).message).toMatch(/^schemaVersion/)
   })
 
   it('validates destinations when the key is present', async () => {

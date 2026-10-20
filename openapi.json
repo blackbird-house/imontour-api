@@ -152,10 +152,11 @@
         "type": "object",
         "properties": {
           "schemaVersion": {
-            "type": "number",
+            "type": "integer",
             "enum": [
               1
-            ]
+            ],
+            "description": "Document schema version. Only 1 exists today; clients should treat a value above 1 as unsupported."
           },
           "id": {
             "type": "string",
@@ -174,7 +175,7 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time",
-            "example": "2026-10-20T09:00:00Z"
+            "example": "2026-10-20T09:00:00.000Z"
           },
           "destinations": {
             "type": "array",
@@ -327,14 +328,66 @@
           "isPlaceholder"
         ]
       },
+      "CreateTripBody": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "enum": [
+              1
+            ],
+            "description": "Document schema version. Only 1 exists today; clients should treat a value above 1 as unsupported.",
+            "default": 1
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Trip name. May be empty or null."
+          },
+          "destinations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Destination"
+            },
+            "maxItems": 200
+          }
+        },
+        "description": "A trip to create. `id` and destination ids are kept when sent; an absent `destinations` creates an empty trip."
+      },
+      "PreconditionFailedError": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Error"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "currentRevision": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "currentRevision"
+            ]
+          }
+        ]
+      },
       "TripInput": {
         "type": "object",
         "properties": {
           "schemaVersion": {
-            "type": "number",
+            "type": "integer",
             "enum": [
               1
             ],
+            "description": "Document schema version. Only 1 exists today; clients should treat a value above 1 as unsupported.",
             "default": 1
           },
           "id": {
@@ -360,52 +413,6 @@
           "destinations"
         ]
       },
-      "NewTripNameOnlyBody": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/NewTripNameOnly"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "destinations": {
-                "description": "Must be absent; a body with `destinations` is a full trip."
-              }
-            }
-          }
-        ]
-      },
-      "NewTripNameOnly": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Trip name. May be empty or null."
-          }
-        }
-      },
-      "PreconditionFailedError": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Error"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "currentRevision": {
-                "type": "integer",
-                "minimum": 1
-              }
-            },
-            "required": [
-              "currentRevision"
-            ]
-          }
-        ]
-      },
       "Rename": {
         "type": "object",
         "properties": {
@@ -428,7 +435,7 @@
       "get": {
         "operationId": "getConfig",
         "tags": [
-          "config"
+          "Config"
         ],
         "summary": "Remote config (public)",
         "description": "No authentication. Clients revalidate with `If-None-Match`.",
@@ -605,19 +612,11 @@
         "summary": "Create a trip (empty or full)",
         "requestBody": {
           "required": true,
-          "description": "Name-only or full trip.",
+          "description": "The trip; `{}` or no body creates an empty unnamed trip.",
           "content": {
             "application/json": {
               "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/TripInput"
-                  },
-                  {
-                    "$ref": "#/components/schemas/NewTripNameOnlyBody"
-                  }
-                ],
-                "description": "A body with a `destinations` key is a full trip (client `id` and destination ids are kept). Otherwise it is name-only and creates an empty trip."
+                "$ref": "#/components/schemas/CreateTripBody"
               }
             }
           }
@@ -817,7 +816,7 @@
         ],
         "operationId": "replaceTrip",
         "summary": "Replace a trip (revision-checked)",
-        "description": "Replaces the whole trip document. The `If-Match` header is REQUIRED: it is modelled as optional in the schema only so that a missing header yields 428 instead of a 400 validation error. A stale revision yields 412 with `currentRevision`.",
+        "description": "Replaces the whole trip document. The `If-Match` header is required; a missing one yields 428. A stale revision yields 412 with `currentRevision`.",
         "parameters": [
           {
             "schema": {
@@ -837,7 +836,7 @@
               "description": "Revision being replaced: `\"3\"` or `3`. Required; missing is 428.",
               "example": "\"3\""
             },
-            "required": false,
+            "required": true,
             "description": "Revision being replaced: `\"3\"` or `3`. Required; missing is 428.",
             "name": "If-Match",
             "in": "header"
