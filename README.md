@@ -244,6 +244,7 @@ The Vercel wiring (rewrite, function entrypoint, bundled files) is covered by lo
 ```sh
 npm test            # vitest (everything)
 npm run test:api    # only the black-box HTTP suite in test/api
+npm run test:coverage  # vitest with v8 coverage of src/ (text table + HTML report in coverage/)
 npm run lint        # eslint
 npm run build       # tsc --noEmit (type-check only)
 npm run format      # prettier --write . (config in .prettierrc.json; docs and README are ignored)
