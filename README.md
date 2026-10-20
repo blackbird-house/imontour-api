@@ -18,6 +18,8 @@ cp env/local.env.example .env
 npm run dev                       # runs migrations automatically (local only), serves :3000
 ```
 
+Shortcut: `npm run local` runs `npm run db:up` and then `npm run dev`. The local server logs every request to the console (local only; deployed environments rely on Vercel's logs).
+
 `docker-compose.yml` is for **local development only**: the database is bound to loopback and uses a fixed dev password. Never reuse it anywhere else.
 
 If the `imontour_test` database is missing (the volume was created before `docker/init-db.sql` existed), recreate the volume with `docker compose down -v` and `npm run db:up`. This deletes local data. `npm run db:down` stops the database and keeps the data.
@@ -243,6 +245,7 @@ The Vercel wiring (rewrite, function entrypoint, bundled files) is covered by lo
 npm test            # vitest
 npm run lint        # eslint
 npm run build       # tsc --noEmit (type-check only)
+npm run format      # prettier --write . (config in .prettierrc.json; docs and README are ignored)
 ```
 
 By default `npm test` runs against an **in-process PGlite database**, so no Docker is needed. Set `TEST_DATABASE_URL` to run against real Postgres instead; CI does:
@@ -314,7 +317,7 @@ src/
   auth/, http/        token verification, user resolver, provider admin port + adapters, ETag and cursor helpers
   domain/             trip summary logic
 db/migrations/        SQL migrations (applied in filename order)
-scripts/              token, migrate, generate-openapi
+scripts/              token, migrate, generate-openapi, db-browse
 config/               remote-config.json
 env/                  per-environment variable templates
 docker/, docker-compose.yml   local Postgres (development only)
