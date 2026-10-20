@@ -258,6 +258,8 @@ TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:54329/imontour_test npm
 
 Each test file works in its own throwaway schema.
 
+`npm run test:coverage` prints a per-file table for `src/**`. Not covered on purpose: the `src/server.ts` entry (signal wiring and `process.exit`; everything it calls is tested in `test/lifecycle.test.ts`) and the throw-if-called stubs in `src/openapi.ts`.
+
 ### Black-box API tests (`test/api`)
 
 Most tests call `app.fetch` in-process. `test/api` talks to a base URL over **real HTTP** and checks the whole contract: config ETag/304, auth failures, the trip lifecycle with `ETag`/`If-Match`/`Location`, pagination, 412/413/415/422/428, per-user isolation, `/v1/me` and the error shape.
@@ -287,6 +289,9 @@ Most tests call `app.fetch` in-process. `test/api` talks to a base URL over **re
 | `test/db` | Migrations, including the `002_users.sql` backfill |
 | `test/env.test.ts`, `test/env.examples.test.ts` | Config loading, safety guards, `env/*.example` drift |
 | `test/deps.test.ts`, `test/e2e.local.test.ts` | Dependency wiring and a full local lifecycle |
+| `test/api` | Black-box contract suite over real HTTP (local ephemeral server, or an opt-in remote one) |
+| `test/lifecycle.test.ts` | Server startup (local setup, request logging, deployed mode) and graceful shutdown |
+| `test/routes/requestlog.test.ts` | Local request logging keeps the JSON 404/error handlers |
 | `test/errors.test.ts` | Error mapping (Postgres invalid-input codes to 422, generic 500) |
 | `test/openapi.test.ts` | OpenAPI document generation |
 

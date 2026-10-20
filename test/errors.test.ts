@@ -1,6 +1,8 @@
 import { Hono } from 'hono'
 import postgres from 'postgres'
 import { describe, expect, it, vi } from 'vitest'
+import { HTTPException } from 'hono/http-exception'
+import { ZodRealError } from 'zod'
 import { errorHandler } from '../src/errors.js'
 
 function appThrowing(err: Error) {
@@ -43,5 +45,23 @@ describe('errorHandler', () => {
     } finally {
       spy.mockRestore()
     }
+  })
+
+  // zod 4: only ZodRealError (what parse and safeParse produce) extends Error, so only it reaches onError.
+  it('maps an HTTPException with an unmapped status to http_error, with a fallback message', async () => {
+    const res = await appThrowing(new HTTPException(418)).request('/')
+    expect(res.status).toBe(418)
+    expect(await res.json()).toEqual({ error: { code: 'http_error', message: 'Request failed' } })
+  })
+
+  it('names the body when a ZodRealError has no path, and the first failing path otherwise', async () => {
+    const rootIssue = new ZodRealError([{ code: 'custom', path: [], message: 'bad shape' }])
+    const nested = new ZodRealError([{ code: 'custom', path: ['destinations', 0, 'color'], message: 'too long' }])
+    expect(await (await appThrowing(rootIssue).request('/')).json()).toEqual({
+      error: { code: 'unprocessable', message: 'body: bad shape' },
+    })
+    expect(await (await appThrowing(nested).request('/')).json()).toEqual({
+      error: { code: 'unprocessable', message: 'destinations.0.color: too long' },
+    })
   })
 })
