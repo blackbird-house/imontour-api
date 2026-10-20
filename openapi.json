@@ -1,0 +1,1548 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Imontour API",
+    "version": "0.1.0",
+    "description": "REST API for Imontour trips. A trip is a document: it is read and replaced as a whole, with the revision as optimistic-concurrency token (ETag / If-Match). Trips and /v1/me require a JWT from the configured identity provider (Supabase today) sent as a Bearer token; the first authenticated request creates the user. GET /v1/config is public. Clients must accept unknown `color`, `place.type` and `timing.mode` values, since new ones may be added without a version bump."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Same origin"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "RemoteConfig": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "number"
+          },
+          "minimumSupportedVersion": {
+            "type": "string"
+          },
+          "recommendedVersion": {
+            "type": "string"
+          },
+          "flags": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "value": {},
+                "rolloutPercent": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        },
+        "additionalProperties": {},
+        "description": "Served verbatim from the config file and never validated server-side. Missing or malformed fields mean \"no constraint\"; clients fail open."
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "TripList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TripSummary"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "TripSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "destinationCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "placeNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "startDay": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Calendar day, yyyy-MM-dd, no time or zone.",
+            "example": "2026-04-01"
+          },
+          "endDay": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Calendar day, yyyy-MM-dd, no time or zone.",
+            "example": "2026-04-01"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "destinationCount",
+          "placeNames",
+          "startDay",
+          "endDay",
+          "updatedAt"
+        ]
+      },
+      "Trip": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "enum": [
+              1
+            ],
+            "description": "Document schema version. Only 1 exists today; clients should treat a value above 1 as unsupported."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-10-20T09:00:00.000Z"
+          },
+          "destinations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Destination"
+            }
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "id",
+          "name",
+          "revision",
+          "updatedAt",
+          "destinations"
+        ]
+      },
+      "Destination": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "rawInput": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Palette color name. Known values: coral, amber, lime, teal, sky, indigo, violet, rose. Any non-empty string is accepted.",
+            "example": "coral"
+          },
+          "place": {
+            "$ref": "#/components/schemas/Place"
+          },
+          "timing": {
+            "$ref": "#/components/schemas/Timing"
+          }
+        },
+        "required": [
+          "id",
+          "rawInput",
+          "color",
+          "place",
+          "timing"
+        ]
+      },
+      "Place": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "example": "Tokyo"
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Known values: city, country, region. Any non-empty string is accepted.",
+            "example": "city"
+          },
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90,
+            "example": 35.68
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180,
+            "example": 139.69
+          },
+          "geocodeSourceID": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "countryCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "JP"
+          }
+        },
+        "required": [
+          "displayName",
+          "type",
+          "latitude",
+          "longitude"
+        ]
+      },
+      "Timing": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Known values: explicitDates, durationOnly, fuzzyMonth. Any non-empty string is accepted.",
+            "example": "explicitDates"
+          },
+          "startDay": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Calendar day, yyyy-MM-dd, no time or zone.",
+            "example": "2026-04-01"
+          },
+          "endDay": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Calendar day, yyyy-MM-dd, no time or zone.",
+            "example": "2026-04-01"
+          },
+          "durationDays": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "example": 5
+          },
+          "targetYear": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "targetMonth": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 12
+          },
+          "isPlaceholder": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "mode",
+          "isPlaceholder"
+        ]
+      },
+      "CreateTripBody": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "enum": [
+              1
+            ],
+            "description": "Document schema version. Only 1 exists today; clients should treat a value above 1 as unsupported.",
+            "default": 1
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Trip name. May be empty or null."
+          },
+          "destinations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Destination"
+            },
+            "maxItems": 200
+          }
+        },
+        "description": "A trip to create. `id` and destination ids are kept when sent; an absent `destinations` creates an empty trip."
+      },
+      "PreconditionFailedError": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Error"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "currentRevision": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "currentRevision"
+            ]
+          }
+        ]
+      },
+      "TripInput": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "enum": [
+              1
+            ],
+            "description": "Document schema version. Only 1 exists today; clients should treat a value above 1 as unsupported.",
+            "default": 1
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Trip name. May be empty or null."
+          },
+          "destinations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Destination"
+            },
+            "maxItems": 200
+          }
+        },
+        "required": [
+          "destinations"
+        ]
+      },
+      "Rename": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Our own user id (not the identity provider subject)."
+          },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Copied from the token at first sign-in; informational only."
+          },
+          "locale": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "en-GB"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-10-20T09:00:00.000Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-10-20T09:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "email",
+          "locale",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "UpdateUser": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100,
+            "description": "Up to 100 characters. `null` clears it; absent leaves it unchanged."
+          },
+          "locale": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 35,
+            "pattern": "^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8})*$",
+            "description": "BCP 47 language tag. `null` clears it; absent leaves it unchanged.",
+            "example": "en-GB"
+          }
+        }
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/v1/config": {
+      "get": {
+        "operationId": "getConfig",
+        "tags": [
+          "Config"
+        ],
+        "summary": "Remote config (public)",
+        "description": "No authentication. Clients revalidate with `If-None-Match`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Previously seen ETag."
+            },
+            "required": false,
+            "description": "Previously seen ETag.",
+            "name": "If-None-Match",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The remote config document.",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string",
+                  "description": "Quoted content hash of the config.",
+                  "example": "\"3f2a9c1d5e7b8a40\""
+                },
+                "required": true,
+                "description": "Quoted content hash of the config."
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "description": "Always `no-cache`: revalidate with `If-None-Match`.",
+                  "example": "no-cache"
+                },
+                "required": true,
+                "description": "Always `no-cache`: revalidate with `If-None-Match`."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteConfig"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not modified; the ETag is unchanged.",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string",
+                  "description": "Quoted content hash of the config.",
+                  "example": "\"3f2a9c1d5e7b8a40\""
+                },
+                "required": true,
+                "description": "Quoted content hash of the config."
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "description": "Always `no-cache`: revalidate with `If-None-Match`.",
+                  "example": "no-cache"
+                },
+                "required": true,
+                "description": "Always `no-cache`: revalidate with `If-None-Match`."
+              }
+            }
+          },
+          "500": {
+            "description": "Config file missing or unparsable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/trips": {
+      "get": {
+        "tags": [
+          "Trips"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "listTrips",
+        "summary": "List trip summaries, newest first",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "description": "Page size, 1-100.",
+              "example": 20
+            },
+            "required": false,
+            "description": "Page size, 1-100.",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Opaque `nextCursor` from the previous page."
+            },
+            "required": false,
+            "description": "Opaque `nextCursor` from the previous page.",
+            "name": "cursor",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of trip summaries.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON, header, query parameter or cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The token could not be checked because the auth key service is unreachable. Retry later; do not sign the user out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Trips"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "createTrip",
+        "summary": "Create a trip (empty or full)",
+        "requestBody": {
+          "required": true,
+          "description": "The trip; `{}` or no body creates an empty unnamed trip.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTripBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created.",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string",
+                  "description": "Quoted trip revision.",
+                  "example": "\"1\""
+                },
+                "required": true,
+                "description": "Quoted trip revision."
+              },
+              "Location": {
+                "schema": {
+                  "type": "string",
+                  "description": "URL of the created trip.",
+                  "example": "/v1/trips/9b2f4a7c-5d1e-4f8a-8c3b-0a1b2c3d4e5f"
+                },
+                "required": true,
+                "description": "URL of the created trip."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Trip"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON, header, query parameter or cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A trip with this id already exists for this user.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body larger than 1 MB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request body is not application/json.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Body is valid JSON but violates the schema.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The token could not be checked because the auth key service is unreachable. Retry later; do not sign the user out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/trips/{id}": {
+      "get": {
+        "tags": [
+          "Trips"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "getTrip",
+        "summary": "Get a trip",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Trip id. A value that is not a UUID is treated as a missing trip (404).",
+              "example": "9b2f4a7c-5d1e-4f8a-8c3b-0a1b2c3d4e5f"
+            },
+            "required": true,
+            "description": "Trip id. A value that is not a UUID is treated as a missing trip (404).",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The trip.",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string",
+                  "description": "Quoted trip revision.",
+                  "example": "\"1\""
+                },
+                "required": true,
+                "description": "Quoted trip revision."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Trip"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such trip for this user (also for a non-UUID id).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The token could not be checked because the auth key service is unreachable. Retry later; do not sign the user out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Trips"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "replaceTrip",
+        "summary": "Replace a trip (revision-checked)",
+        "description": "Replaces the whole trip document. The `If-Match` header is required; a missing one yields 428. A stale revision yields 412 with `currentRevision`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Trip id. A value that is not a UUID is treated as a missing trip (404).",
+              "example": "9b2f4a7c-5d1e-4f8a-8c3b-0a1b2c3d4e5f"
+            },
+            "required": true,
+            "description": "Trip id. A value that is not a UUID is treated as a missing trip (404).",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Revision being replaced: `\"3\"` or `3`. Required; missing is 428.",
+              "example": "\"3\""
+            },
+            "required": true,
+            "description": "Revision being replaced: `\"3\"` or `3`. Required; missing is 428.",
+            "name": "If-Match",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "The whole trip. `id`, `revision` and `updatedAt` in the body are ignored.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Replaced; the new revision.",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string",
+                  "description": "Quoted trip revision.",
+                  "example": "\"1\""
+                },
+                "required": true,
+                "description": "Quoted trip revision."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Trip"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON, header, query parameter or cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such trip for this user (also for a non-UUID id).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "If-Match does not match the current revision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreconditionFailedError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body larger than 1 MB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request body is not application/json.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Body is valid JSON but violates the schema.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "If-Match header is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The token could not be checked because the auth key service is unreachable. Retry later; do not sign the user out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Trips"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "renameTrip",
+        "summary": "Rename a trip",
+        "description": "Changes only the name. `If-Match` is optional here; when sent, a stale revision yields 412.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Trip id. A value that is not a UUID is treated as a missing trip (404).",
+              "example": "9b2f4a7c-5d1e-4f8a-8c3b-0a1b2c3d4e5f"
+            },
+            "required": true,
+            "description": "Trip id. A value that is not a UUID is treated as a missing trip (404).",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Optional revision guard: `\"3\"` or `3`. Stale is 412.",
+              "example": "\"3\""
+            },
+            "required": false,
+            "description": "Optional revision guard: `\"3\"` or `3`. Stale is 412.",
+            "name": "If-Match",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "The new name (string or null).",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Rename"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Renamed; the full trip with its new revision.",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string",
+                  "description": "Quoted trip revision.",
+                  "example": "\"1\""
+                },
+                "required": true,
+                "description": "Quoted trip revision."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Trip"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON, header, query parameter or cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such trip for this user (also for a non-UUID id).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "If-Match does not match the current revision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreconditionFailedError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body larger than 1 MB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request body is not application/json.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Body is valid JSON but violates the schema.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The token could not be checked because the auth key service is unreachable. Retry later; do not sign the user out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Trips"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "deleteTrip",
+        "summary": "Delete a trip",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Trip id. A value that is not a UUID is treated as a missing trip (404).",
+              "example": "9b2f4a7c-5d1e-4f8a-8c3b-0a1b2c3d4e5f"
+            },
+            "required": true,
+            "description": "Trip id. A value that is not a UUID is treated as a missing trip (404).",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted."
+          },
+          "401": {
+            "description": "Missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such trip for this user (also for a non-UUID id).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The token could not be checked because the auth key service is unreachable. Retry later; do not sign the user out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me": {
+      "get": {
+        "tags": [
+          "Me"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "getMe",
+        "summary": "Get the signed-in user profile",
+        "description": "The user is created on the first authenticated request, so this never answers 404 for a fresh sign-in.",
+        "responses": {
+          "200": {
+            "description": "The profile.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The user no longer exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The token could not be checked because the auth key service is unreachable. Retry later; do not sign the user out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Me"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "updateMe",
+        "summary": "Update the profile",
+        "description": "Changes `displayName` and/or `locale`. Absent fields are unchanged; `null` clears a field.",
+        "requestBody": {
+          "required": true,
+          "description": "The fields to change; at least one.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUser"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated profile.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The user no longer exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body larger than 1 MB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request body is not application/json.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Body is valid JSON but violates the schema.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The token could not be checked because the auth key service is unreachable. Retry later; do not sign the user out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Me"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "deleteMe",
+        "summary": "Delete the account",
+        "description": "Permanently deletes the user and all their trips, then asks the identity provider to delete the sign-in account. Provider cleanup is best effort: a failure is logged and does not fail the request. Not undoable.",
+        "responses": {
+          "204": {
+            "description": "Deleted."
+          },
+          "401": {
+            "description": "Missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The token could not be checked because the auth key service is unreachable. Retry later; do not sign the user out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "webhooks": {}
+}

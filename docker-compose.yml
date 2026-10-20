@@ -1,0 +1,30 @@
+services:
+  postgres:
+    image: postgres:16
+    ports:
+      - "127.0.0.1:54329:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: imontour
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d imontour"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Database browser (Adminer). Local only, started by `npm run db:browse`; never deploy this.
+  adminer:
+    image: adminer:5
+    profiles: ["tools"]
+    ports:
+      - "127.0.0.1:8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  pgdata:

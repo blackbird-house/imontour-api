@@ -1,0 +1,9 @@
+node_modules
+.local
+coverage
+openapi.json
+package-lock.json
+public
+docs
+README.md
+docker-compose.yml

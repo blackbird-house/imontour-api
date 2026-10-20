@@ -60,7 +60,7 @@ All routes are under `/v1`, JSON, authenticated except `/v1/config`.
   "id": "uuid",
   "name": "string | null",
   "revision": 3,
-  "updatedAt": "2026-10-20T09:00:00Z",
+  "updatedAt": "2026-10-20T09:00:00.000Z",
   "destinations": [
     {
       "id": "uuid",
@@ -99,7 +99,7 @@ Rules:
 ### Endpoints
 
 - `GET /v1/trips?limit&cursor` → summaries, newest first (by `updatedAt`). Item: `{id, name, destinationCount, placeNames (first 3 destination displayNames, in array order), startDay, endDay, updatedAt}`. `startDay`/`endDay` = earliest/latest **explicit** day across all destinations' `startDay`/`endDay`, `null` if none. Response: `{items, nextCursor}`; `nextCursor` null on the last page.
-- `POST /v1/trips` → body `{name?}` (creates an empty trip) or a full trip (creates it, keeping the client's `id` and destination ids). `201` with the trip, `ETag` = revision, `Location` header. If a trip with that `id` already exists for the user: `409`.
+- `POST /v1/trips` → body `{name?}` (creates an empty trip) or a full trip (creates it, keeping the client's `id` and destination ids; a client `id` is kept in either form). `201` with the trip, `ETag` = revision, `Location` header. If a trip with that `id` already exists for the user: `409`.
 - `GET /v1/trips/{id}` → full trip, `ETag` = revision. Another user's trip is `404`, never `403`.
 - `PUT /v1/trips/{id}` → replaces the whole trip. Requires `If-Match` (missing: `428`). Stale: `412` with the current revision in the body. Success: `200` with the new trip and new `ETag`. Revision increments by 1 per successful write.
 - `PATCH /v1/trips/{id}` → body `{name}` only (string or null). Does not require `If-Match`; it still bumps the revision.
@@ -146,7 +146,7 @@ Added after a builder review. Everything here is **Claude's call** (not a decisi
 - Not a v1 deliverable. The API connects with a privileged role that bypasses RLS, so RLS would add nothing and would complicate tests. Isolation is enforced in code: every query filters on `user_id`, and a test proves user A cannot read, change or delete user B's trip. RLS can be added later if clients ever query the database directly.
 
 **POST /v1/trips**
-- A body containing `destinations` is a full trip (then `destinations` must be an array, possibly empty). Otherwise it is name-only: `{name?}`, creating an empty trip. `{name, destinations: []}` is a full trip.
+- The POST body is one schema (`CreateTripBody`): a trip input whose `destinations` is optional. An absent `destinations` is `[]`, so `{name?}`, `{}` and no body create an empty trip. A client `id` is kept whenever it is sent (also without `destinations`), and `schemaVersion` is validated in every case. When present, `destinations` must be an array (possibly empty).
 - Full trip: the client's `id` and destination ids are kept. `id` is optional; the server generates one if absent. `schemaVersion` defaults to 1 if absent; a higher version than the server knows is `422`.
 - Primary key is `(user_id, id)`, so two users can hold the same id. `409` applies only to a duplicate for the same user and leaks nothing about other users.
 
@@ -167,7 +167,7 @@ Added after a builder review. Everything here is **Claude's call** (not a decisi
 - A static JSON file in the repo, with permissive defaults: no minimum or recommended version and an empty `flags` object. `ETag` is a hash of the content; supports `If-None-Match` → `304`. Contents are owned by the user and edited by changing the file (or pointing `CONFIG_FILE` at another).
 
 **Pagination**
-- Order `updated_at desc, id desc`, keyset pagination on those two columns, opaque base64 cursor. Default limit 20, max 100. An edit moving a trip to the front between page requests can at worst show one trip twice, never skip one; acceptable.
+- Order `updated_at desc, id desc`, keyset pagination on those two columns, opaque base64 cursor. Default limit 20, max 100. Keyset pagination never returns a duplicate; a trip edited between page requests (for example from another device) moves to the front and can be missing from that traversal until the list is reloaded from page 1.
 
 **Tooling and delivery**
 - Node 22 LTS, npm. Vitest. Integration tests run against a real Postgres (docker-compose locally, a service container in CI).

@@ -6,3 +6,7 @@ node_modules
 .local/
 dist
 .superpowers/
+.DS_Store
+*.log
+coverage/
+*.tsbuildinfo
