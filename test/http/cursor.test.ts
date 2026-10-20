@@ -28,6 +28,9 @@ describe('cursor', () => {
     [b64({ u: updatedAt, i: 'not-a-uuid' })],
     [b64('null')],
     [b64([1, 2])],
+    [b64({ u: '2026-02-31T00:00:00.000Z', i: id })],
+    [b64({ u: '2026-04-31T00:00:00.000Z', i: id })],
+    [b64({ u: '2026-10-20T24:00:00.000Z', i: id })],
   ])('returns null for %j', (s) => {
     expect(decodeCursor(s)).toBeNull()
   })
