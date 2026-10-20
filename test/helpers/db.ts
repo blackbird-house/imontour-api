@@ -1,5 +1,6 @@
-import { randomBytes } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { createDb, runMigrations, type Db } from '../../src/db/client.js'
+import { TEST_ISSUER } from './tokens.js'
 
 /**
  * Test database harness.
@@ -50,7 +51,7 @@ export async function createTestSchema(
   const db = createDb(url, { max: process.env.TEST_DATABASE_URL ? 2 : 1 })
   opened.add(db)
   const schema = `t_${randomBytes(6).toString('hex')}`
-  if (opts.migrate !== false) await runMigrations(db, schema)
+  if (opts.migrate !== false) await runMigrations(db, schema, { authIssuer: TEST_ISSUER })
   return {
     db,
     schema,
@@ -69,4 +70,10 @@ export async function stopTestDatabase(): Promise<void> {
   const r = await running
   running = undefined
   await r.stop()
+}
+
+/** Inserts a bare user row (no identity) so tests can own trips directly. */
+export async function insertUser(db: Db, schema: string, id: string = randomUUID()): Promise<string> {
+  await db`insert into ${db(schema)}.users (id) values (${id})`
+  return id
 }

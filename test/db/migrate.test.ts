@@ -1,6 +1,9 @@
+import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDb, runMigrations } from '../../src/db/client.js'
 import { createTestSchema, stopTestDatabase } from '../helpers/db.js'
+
+const ISSUER = 'https://issuer.test/auth/v1'
 
 describe('runMigrations', () => {
   let ctx: Awaited<ReturnType<typeof createTestSchema>>
@@ -14,9 +17,12 @@ describe('runMigrations', () => {
     await stopTestDatabase()
   })
 
-  it('applies 001_trips.sql once and is idempotent', async () => {
-    expect(await runMigrations(ctx.db, ctx.schema)).toEqual(['001_trips.sql'])
-    expect(await runMigrations(ctx.db, ctx.schema)).toEqual([])
+  it('applies every migration once and is idempotent', async () => {
+    expect(await runMigrations(ctx.db, ctx.schema, { authIssuer: ISSUER })).toEqual([
+      '001_trips.sql',
+      '002_users.sql',
+    ])
+    expect(await runMigrations(ctx.db, ctx.schema, { authIssuer: ISSUER })).toEqual([])
   })
 
   it('creates trips with PK (user_id, id)', async () => {
@@ -41,7 +47,69 @@ describe('runMigrations', () => {
   })
 
   it('rejects unsafe schema names', async () => {
-    await expect(runMigrations(ctx.db, 'x"; drop schema public; --')).rejects.toThrow(/invalid schema/i)
+    await expect(runMigrations(ctx.db, 'x"; drop schema public; --', { authIssuer: ISSUER })).rejects.toThrow(/invalid schema/i)
+  })
+})
+
+describe('002_users.sql', () => {
+  let ctx: Awaited<ReturnType<typeof createTestSchema>>
+  const q = () => ctx.db(ctx.schema)
+
+  beforeAll(async () => {
+    ctx = await createTestSchema({ migrate: false })
+  })
+
+  afterAll(async () => {
+    await ctx.drop()
+    await stopTestDatabase()
+  })
+
+  it('refuses to run without an auth issuer', async () => {
+    await expect(runMigrations(ctx.db, ctx.schema)).rejects.toThrow(/auth issuer/i)
+    // 001 was applied in its own transaction before 002 failed.
+    const [{ n }] = await ctx.db<{ n: number }[]>`select count(*)::int as n from ${q()}.schema_migrations`
+    expect(n).toBe(1)
+  })
+
+  it('backfills one user and one identity per distinct trips.user_id, keeping the id', async () => {
+    const a = randomUUID()
+    const b = randomUUID()
+    const trip = (user: string) => ctx.db`
+      insert into ${q()}.trips (user_id, id, schema_version, revision, destinations, created_at, updated_at)
+      values (${user}, ${randomUUID()}, 1, 1, '[]'::jsonb, now(), now())`
+    await trip(a)
+    await trip(a)
+    await trip(b)
+
+    // The issuer is quoted, so a quote in it cannot break out of the literal.
+    const issuer = "https://issuer.test/o'brien"
+    expect(await runMigrations(ctx.db, ctx.schema, { authIssuer: issuer })).toEqual(['002_users.sql'])
+
+    const users = await ctx.db<{ id: string }[]>`select id from ${q()}.users order by id`
+    expect(users.map((u) => u.id)).toEqual([a, b].sort())
+    const identities = await ctx.db<{ issuer: string; subject: string; user_id: string }[]>`
+      select issuer, subject, user_id from ${q()}.identities order by user_id`
+    expect(identities).toEqual([a, b].sort().map((id) => ({ issuer, subject: id, user_id: id })))
+  })
+
+  it('adds the trips -> users foreign key with cascade', async () => {
+    const orphan = ctx.db`
+      insert into ${q()}.trips (user_id, id, schema_version, revision, destinations, created_at, updated_at)
+      values (${randomUUID()}, ${randomUUID()}, 1, 1, '[]'::jsonb, now(), now())`
+    await expect(orphan).rejects.toMatchObject({ code: '23503' })
+
+    const [{ id }] = await ctx.db<{ id: string }[]>`select id from ${q()}.users limit 1`
+    await ctx.db`delete from ${q()}.users where id = ${id}`
+    const left = await ctx.db`select 1 from ${q()}.trips where user_id = ${id}`
+    expect(left).toHaveLength(0)
+    const ids = await ctx.db`select 1 from ${q()}.identities where user_id = ${id}`
+    expect(ids).toHaveLength(0)
+  })
+
+  it('keys identities by (issuer, subject)', async () => {
+    const [{ id }] = await ctx.db<{ id: string }[]>`select id from ${q()}.users limit 1`
+    const dup = ctx.db`insert into ${q()}.identities (issuer, subject, user_id) select issuer, subject, ${id} from ${q()}.identities limit 1`
+    await expect(dup).rejects.toMatchObject({ code: '23505' })
   })
 })
 

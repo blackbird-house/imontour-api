@@ -5,6 +5,11 @@ import postgres from 'postgres'
 export type Db = ReturnType<typeof postgres>
 
 const SCHEMA_NAME = /^[a-z_][a-z0-9_]*$/i
+export type MigrationVars = {
+  /** Issuer recorded for users that already own data (002_users.sql backfill). Required by that migration. */
+  authIssuer?: string
+}
+
 const MIGRATIONS_DIR = fileURLToPath(new URL('../../db/migrations/', import.meta.url))
 
 /**
@@ -30,10 +35,12 @@ function assertSchemaName(schema: string): void {
 /**
  * Applies db/migrations/*.sql in filename order, each in its own transaction,
  * skipping files already recorded in `<schema>.schema_migrations`.
- * The `{{schema}}` placeholder is replaced with the quoted schema identifier.
+ * The `{{schema}}` placeholder is replaced with the quoted schema identifier, and
+ * `{{auth_issuer}}` with the issuer as a SQL string literal (an error if a
+ * migration needs it and `vars.authIssuer` is not given).
  * Returns the filenames applied by this call.
  */
-export async function runMigrations(db: Db, schema: string): Promise<string[]> {
+export async function runMigrations(db: Db, schema: string, vars: MigrationVars = {}): Promise<string[]> {
   assertSchemaName(schema)
   const quoted = `"${schema}"`
 
@@ -48,7 +55,13 @@ export async function runMigrations(db: Db, schema: string): Promise<string[]> {
   const files = (await readdir(MIGRATIONS_DIR)).filter((f) => f.endsWith('.sql')).sort()
   const applied: string[] = []
   for (const file of files) {
-    const body = (await readFile(MIGRATIONS_DIR + file, 'utf8')).replaceAll('{{schema}}', quoted)
+    const raw = await readFile(MIGRATIONS_DIR + file, 'utf8')
+    if (raw.includes('{{auth_issuer}}') && !vars.authIssuer) {
+      throw new Error(`migration ${file} needs the auth issuer (pass vars.authIssuer / set AUTH_ISSUER)`)
+    }
+    const body = raw
+      .replaceAll('{{schema}}', quoted)
+      .replaceAll('{{auth_issuer}}', `'${(vars.authIssuer ?? '').replaceAll("'", "''")}'`)
     const didApply = await db.begin(async (tx) => {
       // Serialise concurrent runners for this schema.
       await tx`select pg_advisory_xact_lock(hashtext(${schema}))`

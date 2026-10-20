@@ -11,7 +11,7 @@ async function main(): Promise<void> {
 
   if (config.appEnv === 'local') {
     if (config.auth.localKeyFile) await ensureLocalKeyFile(config.auth.localKeyFile)
-    const applied = await runMigrations(db, config.dbSchema)
+    const applied = await runMigrations(db, config.dbSchema, { authIssuer: config.auth.issuer })
     for (const file of applied) console.log(`applied ${file}`)
   }
   // Deployed environments never migrate at startup: run `npm run migrate` before deploying.
