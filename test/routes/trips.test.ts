@@ -199,6 +199,27 @@ describe('POST /v1/trips', () => {
     await expectError(res, 400, 'bad_request')
   })
 
+  it('treats a request with no Content-Type and no body as {} (201 empty trip, no server error)', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const res = await t.request('/v1/trips', { method: 'POST', as: USER_A })
+      expect(res.status).toBe(201)
+      expectJson(res)
+      const trip = await body(res)
+      expect(trip).toMatchObject({ name: null, destinations: [], revision: 1 })
+      expect(res.headers.get('etag')).toBe('"1"')
+      expect(spy).not.toHaveBeenCalled()
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('rejects destinations: null with 422 naming destinations', async () => {
+    const res = await t.request('/v1/trips', { method: 'POST', as: USER_A, json: { destinations: null } })
+    const b = await expectError(res, 422, 'unprocessable')
+    expect((b.error as Json).message).toMatch(/^destinations/)
+  })
+
   it('rejects a non-JSON content type with 415', async () => {
     const res = await t.request('/v1/trips', {
       method: 'POST',

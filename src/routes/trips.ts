@@ -67,8 +67,23 @@ const ifMatchOptional = z.object({
     .openapi({ description: 'Optional revision guard: `"3"` or `3`. Stale is 412.', example: '"3"' }),
 })
 
+/**
+ * Name-only branch for POST validation: identical to NewTripNameOnly except a
+ * `destinations` key is rejected, so the two union branches are mutually
+ * exclusive and the validated value alone tells which one matched.
+ */
+const nameOnlyBranch = newTripNameOnlySchema
+  .extend({
+    destinations: z
+      .unknown()
+      .refine((v) => v === undefined, 'must be absent for a name-only trip')
+      .optional()
+      .openapi({ description: 'Must be absent; a body with `destinations` is a full trip.' }),
+  })
+  .openapi('NewTripNameOnlyBody')
+
 const createTripBody = z
-  .union([tripInputSchema, newTripNameOnlySchema])
+  .union([tripInputSchema, nameOnlyBranch])
   .openapi({
     description:
       'A body with a `destinations` key is a full trip (client `id` and destination ids are kept). ' +
@@ -277,7 +292,13 @@ export function registerTripRoutes(app: TripsApp, repo: TripRepo): void {
   app.openapi(
     createTrip,
     async (c) => {
-      const input = parseCreateBody(await c.req.json())
+      // Validated by the mutually exclusive union (a request with no body and no
+      // Content-Type validates as `{}`), so the raw body is never re-read here.
+      const body = c.req.valid('json')
+      const input: TripInput =
+        'destinations' in body && body.destinations !== undefined
+          ? (body as TripInput)
+          : { schemaVersion: CURRENT_SCHEMA_VERSION, name: body.name, destinations: [] }
       let trip: Trip
       try {
         trip = await repo.create(c.get('userId'), input)
@@ -288,8 +309,8 @@ export function registerTripRoutes(app: TripsApp, repo: TripRepo): void {
       return c.json(trip, 201, { ETag: formatEtag(trip.revision), Location: `/v1/trips/${trip.id}` })
     },
     (result) => {
-      // The union validates the shape; on failure report the error of the branch
-      // the POST rule selects, so the message names the real failing path.
+      // On failure, report the error of the branch the POST rule selects (the
+      // hook receives the raw input), so the message names the real failing path.
       if (!result.success && result.target === 'json') parseCreateBody((result as { data?: unknown }).data)
       validationHook(result)
     },
