@@ -12,30 +12,46 @@ const repo = {
   remove: async () => false,
 } as unknown as TripRepo
 
-const app = createApp({ repo, verify: async () => ({ userId: USER }), remoteConfig: stubRemoteConfig })
-const oversized = { Authorization: 'Bearer x', 'Content-Length': String(MAX_BODY_BYTES + 1) }
+const app = createApp({
+  repo,
+  verify: async (token) => {
+    if (token !== 'good') throw new Error('unexpected token')
+    return { userId: USER }
+  },
+  remoteConfig: stubRemoteConfig,
+})
+const oversizedJson = JSON.stringify({ name: 'x'.repeat(MAX_BODY_BYTES + 1) })
+const json = { 'Content-Type': 'application/json' }
 
+// GET is not covered: a GET request cannot carry a body (fetch's Request rejects one).
 describe('body limit scope', () => {
-  it.each([
-    ['GET', '/v1/trips'],
-    ['GET', `/v1/trips/${ID}`],
-    ['DELETE', `/v1/trips/${ID}`],
-  ])('does not apply to %s %s', async (method, path) => {
-    const res = await app.request(path, { method, headers: oversized })
-    expect(res.status).not.toBe(413)
+  it('does not apply to DELETE: an oversized body still reaches the handler (404)', async () => {
+    const res = await app.request(`/v1/trips/${ID}`, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer good', ...json },
+      body: oversizedJson,
+    })
+    expect(res.status).toBe(404)
   })
 
   it.each([
     ['POST', '/v1/trips'],
     ['PUT', `/v1/trips/${ID}`],
     ['PATCH', `/v1/trips/${ID}`],
-  ])('still applies to %s %s', async (method, path) => {
-    const body = JSON.stringify({ name: 'x'.repeat(MAX_BODY_BYTES + 1) })
+  ])('applies to %s %s (413)', async (method, path) => {
     const res = await app.request(path, {
       method,
-      headers: { Authorization: 'Bearer x', 'Content-Type': 'application/json' },
-      body,
+      headers: { Authorization: 'Bearer good', ...json },
+      body: oversizedJson,
     })
     expect(res.status).toBe(413)
+  })
+
+  it.each([
+    ['POST', '/v1/trips'],
+    ['PUT', `/v1/trips/${ID}`],
+  ])('authenticates first: anonymous %s %s with an oversized body is 401', async (method, path) => {
+    const res = await app.request(path, { method, headers: json, body: oversizedJson })
+    expect(res.status).toBe(401)
   })
 })

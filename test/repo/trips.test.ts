@@ -102,21 +102,28 @@ describe('trip repository', () => {
       repo.replace(USER_A, created.id, 1, input({ name: 'one' })),
       repo.replace(USER_A, created.id, 1, input({ name: 'two' })),
     ])
-    expect(results.filter((r) => r.kind === 'ok')).toHaveLength(1)
-    expect(results.filter((r) => r.kind === 'stale')).toHaveLength(1)
-    expect((await repo.get(USER_A, created.id))?.revision).toBe(2)
+    const winners = results.filter((r) => r.kind === 'ok')
+    expect(winners).toHaveLength(1)
+    expect(results.filter((r) => r.kind === 'stale')).toEqual([{ kind: 'stale', currentRevision: 2 }])
+    const stored = await repo.get(USER_A, created.id)
+    expect(stored?.revision).toBe(2)
+    expect(stored?.name).toBe(winners[0]!.kind === 'ok' ? winners[0]!.trip.name : undefined)
   })
 
-  it('rename bumps revision and updatedAt', async () => {
+  it('rename without expectedRevision applies to any current revision, bumping it and updatedAt', async () => {
     const created = await repo.create(USER_A, input({ name: 'a' }))
+    const replaced = await repo.replace(USER_A, created.id, 1, input({ name: 'a2' }))
+    expect(replaced.kind).toBe('ok')
+    if (replaced.kind !== 'ok') return
+    expect(replaced.trip.revision).toBe(2)
     await new Promise((r) => setTimeout(r, 5))
     const res = await repo.rename(USER_A, created.id, 'b')
     expect(res.kind).toBe('ok')
     if (res.kind !== 'ok') return
     expect(res.trip.name).toBe('b')
-    expect(res.trip.revision).toBe(2)
-    expect(res.trip.updatedAt > created.updatedAt).toBe(true)
-    expect(res.trip.destinations).toEqual(created.destinations)
+    expect(res.trip.revision).toBe(3)
+    expect(res.trip.updatedAt > replaced.trip.updatedAt).toBe(true)
+    expect(res.trip.destinations).toEqual(replaced.trip.destinations)
   })
 
   it('rename honors expectedRevision when given', async () => {

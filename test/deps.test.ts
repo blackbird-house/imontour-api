@@ -26,7 +26,7 @@ describe('buildDeps', () => {
     }
   })
 
-  it('does no I/O at import or build time when a db is supplied', async () => {
+  it('does no I/O at build time when it creates the db from the URL itself', async () => {
     // postgres.js connects lazily, so creating the db from the URL must not connect either.
     const deps = buildDeps(config)
     expect(deps.repo).toBeDefined()

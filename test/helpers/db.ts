@@ -45,8 +45,9 @@ export async function createTestSchema(
   opts: { migrate?: boolean } = {},
 ): Promise<{ db: Db; schema: string; drop(): Promise<void> }> {
   const { url } = await getRunning()
-  // PGlite serves one connection at a time, so use a single pooled connection.
-  const db = createDb(url, { max: 1 })
+  // PGlite serves one connection at a time, so use a single pooled connection;
+  // a real server gets two so concurrency tests really run concurrently.
+  const db = createDb(url, { max: process.env.TEST_DATABASE_URL ? 2 : 1 })
   opened.add(db)
   const schema = `t_${randomBytes(6).toString('hex')}`
   if (opts.migrate !== false) await runMigrations(db, schema)
