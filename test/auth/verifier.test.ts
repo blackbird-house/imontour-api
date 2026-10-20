@@ -28,13 +28,29 @@ beforeAll(async () => {
 })
 
 describe('createVerifier (JWKS mode)', () => {
-  it('accepts a valid token and returns the sub', async () => {
-    await expect(verify(await signToken(kp))).resolves.toEqual({ userId: TEST_USER_ID })
+  it('accepts a valid token and returns the issuer and subject', async () => {
+    await expect(verify(await signToken(kp))).resolves.toEqual({ issuer: TEST_ISSUER, subject: TEST_USER_ID })
   })
 
-  it('lowercases the sub', async () => {
-    const sub = 'ABCDEF00-1111-4111-8111-111111111111'
-    await expect(verify(await signToken(kp, { sub }))).resolves.toEqual({ userId: sub.toLowerCase() })
+  it('keeps the subject exactly as issued (opaque, not necessarily a UUID)', async () => {
+    for (const sub of ['ABCDEF00-1111-4111-8111-111111111111', 'user-1', 'apple|001234.abcd']) {
+      await expect(verify(await signToken(kp, { sub }))).resolves.toEqual({ issuer: TEST_ISSUER, subject: sub })
+    }
+  })
+
+  it('returns the email claim when present, and omits it otherwise', async () => {
+    await expect(verify(await signToken(kp, { email: 'a@example.com' }))).resolves.toEqual({
+      issuer: TEST_ISSUER,
+      subject: TEST_USER_ID,
+      email: 'a@example.com',
+    })
+    expect(await verify(await signToken(kp))).not.toHaveProperty('email')
+  })
+
+  it('ignores an email it cannot store or that is absurdly long', async () => {
+    for (const email of ['', 'a\u0000b@example.com', `${'a'.repeat(320)}@example.com`]) {
+      expect(await verify(await signToken(kp, { email }))).not.toHaveProperty('email')
+    }
   })
 
   it('rejects an expired token', async () => {
@@ -67,7 +83,7 @@ describe('createVerifier (JWKS mode)', () => {
   })
 
   it('accepts a token that expired 30 s ago (clock skew)', async () => {
-    await expect(verify(await signToken(kp, { exp: now() - 30 }))).resolves.toEqual({ userId: TEST_USER_ID })
+    await expect(verify(await signToken(kp, { exp: now() - 30 }))).resolves.toMatchObject({ subject: TEST_USER_ID })
   })
 
   it('rejects a token that expired 90 s ago', async () => {
@@ -82,8 +98,10 @@ describe('createVerifier (JWKS mode)', () => {
     await expect(verify(await signToken(kp, { sub: null }))).rejects.toBeInstanceOf(UnauthorizedError)
   })
 
-  it('rejects a non-UUID sub', async () => {
-    await expect(verify(await signToken(kp, { sub: 'user-1' }))).rejects.toBeInstanceOf(UnauthorizedError)
+  it('rejects an empty, oversized or NUL-containing sub', async () => {
+    for (const sub of ['', 'x'.repeat(256), 'a\u0000b']) {
+      await expect(verify(await signToken(kp, { sub }))).rejects.toBeInstanceOf(UnauthorizedError)
+    }
   })
 
   it('does not leak the underlying error message', async () => {
@@ -97,7 +115,7 @@ describe('createVerifier (secret mode)', () => {
   const secretVerify = createVerifier({ issuer: TEST_ISSUER, audience: TEST_AUDIENCE, jwtSecret: secret })
 
   it('accepts an HS256 token', async () => {
-    await expect(secretVerify(await signHs256(secret))).resolves.toEqual({ userId: TEST_USER_ID })
+    await expect(secretVerify(await signHs256(secret))).resolves.toEqual({ issuer: TEST_ISSUER, subject: TEST_USER_ID })
   })
 
   it('rejects an HS256 token with the wrong secret', async () => {
@@ -178,7 +196,17 @@ describe('createVerifier (key service failures)', () => {
 describe('bearerAuth middleware', () => {
   const app = new Hono<{ Variables: AuthVariables }>()
   app.onError(errorHandler)
-  app.use("*", bearerAuth((token) => verify(token)))
+  const seen: unknown[] = []
+  app.use(
+    '*',
+    bearerAuth(
+      (token) => verify(token),
+      async (identity) => {
+        seen.push(identity)
+        return `internal-${identity.subject}`
+      },
+    ),
+  )
   app.get('/me', (c) => c.json({ userId: c.get('userId') }))
 
   const call = (headers?: Record<string, string>) => app.request('/me', { headers })
@@ -188,10 +216,17 @@ describe('bearerAuth middleware', () => {
     expect(await res.json()).toEqual({ error: { code: 'unauthorized', message: 'Invalid or missing token' } })
   }
 
-  it('sets userId for a valid bearer token', async () => {
+  it('sets userId to the resolved internal id for a valid bearer token', async () => {
     const res = await call({ Authorization: `Bearer ${await signToken(kp)}` })
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ userId: TEST_USER_ID })
+    expect(await res.json()).toEqual({ userId: `internal-${TEST_USER_ID}` })
+    expect(seen.at(-1)).toEqual({ issuer: TEST_ISSUER, subject: TEST_USER_ID })
+  })
+
+  it('does not resolve a user for a rejected token', async () => {
+    const before = seen.length
+    await expectUnauthorized(await call({ Authorization: 'Bearer nope' }))
+    expect(seen).toHaveLength(before)
   })
 
   it('accepts a case-insensitive scheme', async () => {

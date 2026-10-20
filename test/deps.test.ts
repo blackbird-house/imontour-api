@@ -21,9 +21,32 @@ describe('buildDeps', () => {
       await expect(deps.verify('garbage')).rejects.toBeInstanceOf(UnauthorizedError)
       expect(typeof deps.repo.list).toBe('function')
       expect(typeof deps.remoteConfig).toBe('function')
+      expect(typeof deps.users.get).toBe('function')
+      expect(typeof deps.resolveUser).toBe('function')
     } finally {
       await drop()
     }
+  })
+
+  it('wires a no-op identity admin without admin credentials', async () => {
+    const deps = buildDeps(config)
+    await expect(deps.identityAdmin.deleteIdentity({ issuer: config.auth.issuer, subject: 'x' })).resolves.toBeUndefined()
+  })
+
+  it('wires the Supabase identity admin when admin credentials are configured', async () => {
+    const calls: string[] = []
+    const real = globalThis.fetch
+    globalThis.fetch = (async (url: string) => {
+      calls.push(url)
+      return new Response(null, { status: 200 })
+    }) as unknown as typeof fetch
+    try {
+      const deps = buildDeps({ ...config, identityAdmin: { url: 'https://ref.supabase.co', serviceKey: 'k' } })
+      await deps.identityAdmin.deleteIdentity({ issuer: config.auth.issuer, subject: 'abc' })
+    } finally {
+      globalThis.fetch = real
+    }
+    expect(calls).toEqual(['https://ref.supabase.co/auth/v1/admin/users/abc'])
   })
 
   it('does no I/O at build time when it creates the db from the URL itself', async () => {

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createTripRepo, DuplicateTripError, type TripRepo } from '../../src/repo/trips.js'
 import type { Destination, TripInput } from '../../src/schemas/trip.js'
-import { createTestSchema, stopTestDatabase } from '../helpers/db.js'
+import { createTestSchema, insertUser, stopTestDatabase } from '../helpers/db.js'
 
 const USER_A = randomUUID()
 const USER_B = randomUUID()
@@ -29,6 +29,9 @@ describe('trip repository', () => {
   beforeAll(async () => {
     ctx = await createTestSchema()
     repo = createTripRepo(ctx.db, ctx.schema)
+    // trips.user_id references users.id.
+    await insertUser(ctx.db, ctx.schema, USER_A)
+    await insertUser(ctx.db, ctx.schema, USER_B)
   })
 
   afterAll(async () => {
@@ -179,7 +182,7 @@ describe('trip repository', () => {
 
   describe('list', () => {
     it('returns newest first and paginates each trip exactly once', async () => {
-      const user = randomUUID()
+      const user = await insertUser(ctx.db, ctx.schema)
       const ids: string[] = []
       for (let i = 0; i < 5; i++) {
         const t = await repo.create(user, input({ name: `t${i}` }))
@@ -217,7 +220,7 @@ describe('trip repository', () => {
     })
 
     it('exact-fit page has null nextCursor and summaries are built', async () => {
-      const user = randomUUID()
+      const user = await insertUser(ctx.db, ctx.schema)
       await repo.create(
         user,
         input({
@@ -240,7 +243,7 @@ describe('trip repository', () => {
     })
 
     it("does not list another user's trips; empty list is fine", async () => {
-      const page = await repo.list(randomUUID(), { limit: 10 })
+      const page = await repo.list(await insertUser(ctx.db, ctx.schema), { limit: 10 })
       expect(page).toEqual({ items: [], nextCursor: null })
     })
   })

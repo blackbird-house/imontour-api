@@ -16,6 +16,7 @@ export type TestKeyPair = { kid: string; privateKey: CryptoKey; publicKey: Crypt
 
 export type TokenClaims = {
   sub?: string | null
+  email?: string
   iss?: string
   aud?: string
   /** Absolute expiry, seconds since epoch. Defaults to now + 1h. */
@@ -33,6 +34,7 @@ export async function makeKeyPair(): Promise<TestKeyPair> {
 function payloadFor(claims: TokenClaims) {
   const payload: Record<string, unknown> = {}
   if (claims.sub !== null) payload.sub = claims.sub ?? TEST_USER_ID
+  if (claims.email !== undefined) payload.email = claims.email
   return payload
 }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createApp, MAX_BODY_BYTES } from '../../src/app.js'
 import type { TripRepo } from '../../src/repo/trips.js'
-import { stubRemoteConfig } from '../helpers/app.js'
+import { stubDeps } from '../helpers/app.js'
 
 const USER = '11111111-1111-4111-8111-111111111111'
 const ID = '9b2f4a7c-5d1e-4f8a-8c3b-0a1b2c3d4e5f'
@@ -12,14 +12,16 @@ const repo = {
   remove: async () => false,
 } as unknown as TripRepo
 
-const app = createApp({
-  repo,
-  verify: async (token) => {
-    if (token !== 'good') throw new Error('unexpected token')
-    return { userId: USER }
-  },
-  remoteConfig: stubRemoteConfig,
-})
+const app = createApp(
+  stubDeps({
+    repo,
+    verify: async (token) => {
+      if (token !== 'good') throw new Error('unexpected token')
+      return { issuer: 'https://issuer.test', subject: USER }
+    },
+    resolveUser: async () => USER,
+  }),
+)
 const oversizedJson = JSON.stringify({ name: 'x'.repeat(MAX_BODY_BYTES + 1) })
 const json = { 'Content-Type': 'application/json' }
 

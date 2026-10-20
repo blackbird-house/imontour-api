@@ -18,10 +18,11 @@ let dir: string
 let drop: () => Promise<void>
 let app: ReturnType<typeof createApp>
 let auth: Record<string, string>
+let keyFile: string
 
 beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), 'imontour-e2e-'))
-  const keyFile = join(dir, 'jwks.json')
+  keyFile = join(dir, 'jwks.json')
   const harness = await createTestSchema()
   drop = harness.drop
 
@@ -79,6 +80,20 @@ describe('local end-to-end', () => {
 
   it('rejects trips requests without a token', async () => {
     expect((await app.request('/v1/trips')).status).toBe(401)
+  })
+
+  it('provisions the user on the first request and serves and deletes the profile', async () => {
+    const token = await signLocalToken(keyFile, { sub: randomUUID(), iss: ISSUER, aud: 'authenticated' })
+    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+    const me = await app.request('/v1/me', { headers })
+    expect(me.status).toBe(200)
+    const profile = (await me.json()) as Json
+    expect(profile).toMatchObject({ displayName: null, locale: null })
+
+    const patched = await app.request('/v1/me', { method: 'PATCH', headers, body: JSON.stringify({ displayName: 'Dev' }) })
+    expect(await patched.json()).toMatchObject({ id: profile.id, displayName: 'Dev' })
+
+    expect((await app.request('/v1/me', { method: 'DELETE', headers })).status).toBe(204)
   })
 
   it('runs the full trip lifecycle', async () => {

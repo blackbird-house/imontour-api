@@ -43,7 +43,10 @@ describe('OpenAPI document', () => {
   })
 
   it('contains the expected paths and methods', () => {
-    expect(Object.keys(doc.paths)).toEqual(expect.arrayContaining(['/v1/trips', '/v1/trips/{id}', '/v1/config']))
+    expect(Object.keys(doc.paths)).toEqual(
+      expect.arrayContaining(['/v1/trips', '/v1/trips/{id}', '/v1/config', '/v1/me']),
+    )
+    expect(Object.keys(doc.paths['/v1/me']).sort()).toEqual(['delete', 'get', 'patch'])
     expect(Object.keys(doc.paths['/v1/trips/{id}']).sort()).toEqual(['delete', 'get', 'patch', 'put'])
   })
 
@@ -78,15 +81,15 @@ describe('OpenAPI document', () => {
     expect(doc.components.schemas.TripInput.properties.schemaVersion.default).toBe(1)
   })
 
-  it('tags operations Trips and Config', () => {
+  it('tags operations Trips, Me and Config', () => {
     const tags = new Set(operations().flatMap(({ op }) => op.tags as string[]))
-    expect([...tags].sort()).toEqual(['Config', 'Trips'])
+    expect([...tags].sort()).toEqual(['Config', 'Me', 'Trips'])
   })
 
-  it('defines the bearerAuth scheme and applies it to trips only', () => {
+  it('defines the bearerAuth scheme and applies it to trips and me only', () => {
     expect(doc.components.securitySchemes.bearerAuth).toEqual({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' })
     const ops = operations()
-    for (const { path, op } of ops.filter((o) => o.path.startsWith('/v1/trips'))) {
+    for (const { path, op } of ops.filter((o) => o.path.startsWith('/v1/trips') || o.path === '/v1/me')) {
       expect(op.security, path).toEqual([{ bearerAuth: [] }])
     }
     expect(doc.paths['/v1/config'].get.security ?? []).toEqual([])
@@ -129,7 +132,7 @@ describe('OpenAPI document', () => {
 
   it('declares 413 only on operations that accept a body, and 500 everywhere', () => {
     for (const { path, method, op } of operations()) {
-      const hasBody = ['post', 'put', 'patch'].includes(method) && path.startsWith('/v1/trips')
+      const hasBody = ['post', 'put', 'patch'].includes(method) && (path.startsWith('/v1/trips') || path === '/v1/me')
       expect(op.responses['413'] !== undefined, `${method} ${path} 413`).toBe(hasBody)
       expect(op.responses['500'], `${method} ${path} 500`).toBeDefined()
     }
@@ -158,8 +161,22 @@ describe('OpenAPI document', () => {
       'patch /v1/trips/{id}': 'renameTrip',
       'delete /v1/trips/{id}': 'deleteTrip',
       'get /v1/config': 'getConfig',
+      'get /v1/me': 'getMe',
+      'patch /v1/me': 'updateMe',
+      'delete /v1/me': 'deleteMe',
     })
-    expect(new Set(Object.values(ids)).size).toBe(7)
+    expect(new Set(Object.values(ids)).size).toBe(10)
+  })
+
+  it('documents the Me schemas: User fields, and UpdateUser with both fields optional and nullable', () => {
+    const { User, UpdateUser } = doc.components.schemas as Json
+    expect(User.required).toEqual(expect.arrayContaining(['id', 'displayName', 'email', 'locale', 'createdAt', 'updatedAt']))
+    expect(UpdateUser.required ?? []).toEqual([])
+    expect(Object.keys(UpdateUser.properties).sort()).toEqual(['displayName', 'locale'])
+    expect(doc.paths['/v1/me'].get.responses['200'].content['application/json'].schema).toEqual({
+      $ref: '#/components/schemas/User',
+    })
+    expect(doc.paths['/v1/me'].delete.responses['204']).toBeDefined()
   })
 
   it('has no dangling $ref', () => {

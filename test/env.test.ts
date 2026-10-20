@@ -127,6 +127,31 @@ describe('loadConfig', () => {
   })
 })
 
+describe('identity provider admin config', () => {
+  const admin = { AUTH_ADMIN_URL: 'https://ref.supabase.co', AUTH_ADMIN_SERVICE_KEY: 'service-key' }
+
+  it('is absent by default', () => {
+    expect(loadConfig(base).identityAdmin).toBeUndefined()
+  })
+
+  it('is read when both variables are set', () => {
+    expect(loadConfig({ ...base, ...admin }).identityAdmin).toEqual({
+      url: 'https://ref.supabase.co',
+      serviceKey: 'service-key',
+    })
+  })
+
+  it('treats empty strings as unset', () => {
+    expect(loadConfig({ ...base, AUTH_ADMIN_URL: '', AUTH_ADMIN_SERVICE_KEY: '' }).identityAdmin).toBeUndefined()
+  })
+
+  it.each([['AUTH_ADMIN_URL'], ['AUTH_ADMIN_SERVICE_KEY']])('rejects %s without its pair', (name) => {
+    const env = { ...base, [name]: admin[name as keyof typeof admin] }
+    expect(() => loadConfig(env)).toThrow(ConfigError)
+    expect(() => loadConfig(env)).toThrow(/AUTH_ADMIN_URL and AUTH_ADMIN_SERVICE_KEY/)
+  })
+})
+
 describe('assertVercelConfig', () => {
   it('refuses APP_ENV=local (Vercel is never local)', () => {
     const local = loadConfig({ ...base, APP_ENV: 'local', DATABASE_URL: 'postgres://u:p@localhost:5432/app' })

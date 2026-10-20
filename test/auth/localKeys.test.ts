@@ -26,7 +26,7 @@ describe('local keys', () => {
     await ensureLocalKeyFile(path)
     const token = await signLocalToken(path, { sub, iss: 'http://iss.local', aud: 'authenticated' })
     const verify = createVerifier({ issuer: 'http://iss.local', audience: 'authenticated', localKeyFile: path })
-    await expect(verify(token)).resolves.toEqual({ userId: sub })
+    await expect(verify(token)).resolves.toEqual({ issuer: 'http://iss.local', subject: sub })
     const wrong = createVerifier({ issuer: 'http://other.local', audience: 'authenticated', localKeyFile: path })
     await expect(wrong(token)).rejects.toBeInstanceOf(UnauthorizedError)
   })

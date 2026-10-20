@@ -9,15 +9,19 @@ const unused = (): never => {
 
 const DESCRIPTION =
   'REST API for Imontour trips. A trip is a document: it is read and replaced as a whole, ' +
-  'with the revision as optimistic-concurrency token (ETag / If-Match). Trips endpoints require a ' +
-  'Supabase JWT sent as a Bearer token; GET /v1/config is public. Clients must accept unknown ' +
+  'with the revision as optimistic-concurrency token (ETag / If-Match). Trips and /v1/me require a ' +
+  'JWT from the configured identity provider (Supabase today) sent as a Bearer token; the first ' +
+  'authenticated request creates the user. GET /v1/config is public. Clients must accept unknown ' +
   '`color`, `place.type` and `timing.mode` values, since new ones may be added without a version bump.'
 
 /** Builds the OpenAPI 3.1 document from the real route declarations. No I/O besides package.json. */
 export function buildOpenApiDocument(): object {
   const app = createApp({
     repo: new Proxy({}, { get: () => unused }) as never,
+    users: new Proxy({}, { get: () => unused }) as never,
     verify: unused,
+    resolveUser: unused,
+    identityAdmin: new Proxy({}, { get: () => unused }) as never,
     remoteConfig: unused,
   })
   return app.getOpenAPI31Document({

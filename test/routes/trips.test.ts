@@ -4,7 +4,7 @@ import { createApp } from '../../src/app.js'
 import { authUnavailable } from '../../src/auth/verifier.js'
 import { encodeCursor } from '../../src/http/cursor.js'
 import type { TripRepo } from '../../src/repo/trips.js'
-import { createTestApp, stubRemoteConfig } from '../helpers/app.js'
+import { createTestApp, stubDeps } from '../helpers/app.js'
 import { TEST_USER_ID } from '../helpers/tokens.js'
 
 type TestApp = Awaited<ReturnType<typeof createTestApp>>
@@ -711,13 +711,13 @@ describe('authentication', () => {
 
 describe('auth key service outage', () => {
   it('answers 503 service_unavailable, not 401', async () => {
-    const app = createApp({
-      repo: {} as TripRepo,
-      verify: async () => {
-        throw authUnavailable()
-      },
-      remoteConfig: stubRemoteConfig,
-    })
+    const app = createApp(
+      stubDeps({
+        verify: async () => {
+          throw authUnavailable()
+        },
+      }),
+    )
     const res = await app.request('/v1/trips', { headers: { Authorization: 'Bearer x' } })
     await expectError(res, 503, 'service_unavailable')
   })
@@ -733,7 +733,7 @@ describe('unexpected failures', () => {
   it('returns a JSON 500 without leaking details', async () => {
     const boom = () => Promise.reject(new Error('db exploded'))
     const repo: TripRepo = { list: boom, get: boom, create: boom, replace: boom, rename: boom, remove: boom }
-    const app = createApp({ repo, verify: t.verify, remoteConfig: stubRemoteConfig })
+    const app = createApp({ ...t.deps, repo })
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
       const res = await app.request('/v1/trips', {

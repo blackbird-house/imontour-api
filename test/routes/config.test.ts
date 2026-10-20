@@ -4,18 +4,16 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createApp } from '../../src/app.js'
 import { UnauthorizedError } from '../../src/errors.js'
-import type { TripRepo } from '../../src/repo/trips.js'
 import { createFileConfigSource } from '../../src/routes/config.js'
+import { stubDeps } from '../helpers/app.js'
 
-const unused = () => Promise.reject(new Error('unused'))
-const repo: TripRepo = { list: unused, get: unused, create: unused, replace: unused, rename: unused, remove: unused }
 const verify = () => Promise.reject(new UnauthorizedError())
 
 let dir: string
 let file: string
 
 function appFor(path: string) {
-  return createApp({ repo, verify, remoteConfig: createFileConfigSource(path) })
+  return createApp(stubDeps({ verify, remoteConfig: createFileConfigSource(path) }))
 }
 
 beforeAll(async () => {

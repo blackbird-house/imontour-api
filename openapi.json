@@ -3,7 +3,7 @@
   "info": {
     "title": "Imontour API",
     "version": "0.1.0",
-    "description": "REST API for Imontour trips. A trip is a document: it is read and replaced as a whole, with the revision as optimistic-concurrency token (ETag / If-Match). Trips endpoints require a Supabase JWT sent as a Bearer token; GET /v1/config is public. Clients must accept unknown `color`, `place.type` and `timing.mode` values, since new ones may be added without a version bump."
+    "description": "REST API for Imontour trips. A trip is a document: it is read and replaced as a whole, with the revision as optimistic-concurrency token (ETag / If-Match). Trips and /v1/me require a JWT from the configured identity provider (Supabase today) sent as a Bearer token; the first authenticated request creates the user. GET /v1/config is public. Clients must accept unknown `color`, `place.type` and `timing.mode` values, since new ones may be added without a version bump."
   },
   "servers": [
     {
@@ -426,6 +426,77 @@
         "required": [
           "name"
         ]
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Our own user id (not the identity provider subject)."
+          },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Copied from the token at first sign-in; informational only."
+          },
+          "locale": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "en-GB"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-10-20T09:00:00.000Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-10-20T09:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "email",
+          "locale",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "UpdateUser": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100,
+            "description": "Up to 100 characters. `null` clears it; absent leaves it unchanged."
+          },
+          "locale": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 35,
+            "pattern": "^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8})*$",
+            "description": "BCP 47 language tag. `null` clears it; absent leaves it unchanged.",
+            "example": "en-GB"
+          }
+        }
       }
     },
     "parameters": {}
@@ -1210,6 +1281,237 @@
           },
           "404": {
             "description": "No such trip for this user (also for a non-UUID id).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The token could not be checked because the auth key service is unreachable. Retry later; do not sign the user out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me": {
+      "get": {
+        "tags": [
+          "Me"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "getMe",
+        "summary": "Get the signed-in user profile",
+        "description": "The user is created on the first authenticated request, so this never answers 404 for a fresh sign-in.",
+        "responses": {
+          "200": {
+            "description": "The profile.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The user no longer exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The token could not be checked because the auth key service is unreachable. Retry later; do not sign the user out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Me"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "updateMe",
+        "summary": "Update the profile",
+        "description": "Changes `displayName` and/or `locale`. Absent fields are unchanged; `null` clears a field.",
+        "requestBody": {
+          "required": true,
+          "description": "The fields to change; at least one.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUser"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated profile.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The user no longer exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body larger than 1 MB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request body is not application/json.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Body is valid JSON but violates the schema.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The token could not be checked because the auth key service is unreachable. Retry later; do not sign the user out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Me"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "deleteMe",
+        "summary": "Delete the account",
+        "description": "Permanently deletes the user and all their trips, then asks the identity provider to delete the sign-in account. Provider cleanup is best effort: a failure is logged and does not fail the request. Not undoable.",
+        "responses": {
+          "204": {
+            "description": "Deleted."
+          },
+          "401": {
+            "description": "Missing or invalid bearer token.",
             "content": {
               "application/json": {
                 "schema": {

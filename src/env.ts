@@ -8,12 +8,15 @@ export type AuthConfig = {
   jwtSecret?: string
   localKeyFile?: string
 }
+/** Credentials for deleting the account at the identity provider (Supabase admin API). */
+export type IdentityAdminConfig = { url: string; serviceKey: string }
 export type Config = {
   appEnv: AppEnv
   port: number
   databaseUrl: string
   dbSchema: string
   auth: AuthConfig
+  identityAdmin?: IdentityAdminConfig
   configFile: string
 }
 
@@ -39,6 +42,8 @@ const schema = z.object({
   AUTH_JWKS_URL: optional,
   AUTH_JWT_SECRET: optional,
   AUTH_LOCAL_KEY_FILE: optional,
+  AUTH_ADMIN_URL: optional,
+  AUTH_ADMIN_SERVICE_KEY: optional,
   CONFIG_FILE: z.string().trim().min(1).default('config/remote-config.json'),
 })
 
@@ -93,6 +98,10 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     throw new ConfigError('AUTH_JWKS_URL or AUTH_JWT_SECRET is required (exactly one)')
   }
 
+  if (Boolean(e.AUTH_ADMIN_URL) !== Boolean(e.AUTH_ADMIN_SERVICE_KEY)) {
+    throw new ConfigError('AUTH_ADMIN_URL and AUTH_ADMIN_SERVICE_KEY must be set together')
+  }
+
   if (e.APP_ENV !== 'local' && isLocalHost(hostOf(e.DATABASE_URL))) {
     throw new ConfigError(`DATABASE_URL must not point at a local host when APP_ENV=${e.APP_ENV}`)
   }
@@ -102,7 +111,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
   if (e.AUTH_JWT_SECRET) auth.jwtSecret = e.AUTH_JWT_SECRET
   if (e.AUTH_LOCAL_KEY_FILE) auth.localKeyFile = e.AUTH_LOCAL_KEY_FILE
 
-  return {
+  const config: Config = {
     appEnv: e.APP_ENV,
     port,
     databaseUrl: e.DATABASE_URL,
@@ -110,6 +119,10 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     auth,
     configFile: e.CONFIG_FILE,
   }
+  if (e.AUTH_ADMIN_URL && e.AUTH_ADMIN_SERVICE_KEY) {
+    config.identityAdmin = { url: e.AUTH_ADMIN_URL, serviceKey: e.AUTH_ADMIN_SERVICE_KEY }
+  }
+  return config
 }
 
 /**
