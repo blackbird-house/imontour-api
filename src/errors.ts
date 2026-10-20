@@ -1,4 +1,5 @@
 import type { Context } from 'hono'
+import { HTTPException } from 'hono/http-exception'
 import { ZodError } from 'zod'
 
 export class ApiError extends Error {
@@ -31,9 +32,21 @@ export const preconditionRequired = () =>
 export const payloadTooLarge = () => new ApiError(413, 'payload_too_large', 'Payload too large')
 export const unprocessable = (message: string) => new ApiError(422, 'unprocessable', message)
 
+const HTTP_EXCEPTION_CODES: Record<number, string> = {
+  400: 'bad_request',
+  404: 'not_found',
+  413: 'payload_too_large',
+  415: 'unsupported_media_type',
+}
+
 export function errorHandler(err: Error, c: Context): Response {
   if (err instanceof ApiError) {
     return c.json({ error: { code: err.code, message: err.message }, ...err.extra }, err.status as 400)
+  }
+  if (err instanceof HTTPException) {
+    // Raised by Hono itself, e.g. malformed JSON (400) or an unsupported media type (415).
+    const code = HTTP_EXCEPTION_CODES[err.status] ?? 'http_error'
+    return c.json({ error: { code, message: err.message || 'Request failed' } }, err.status)
   }
   if (err instanceof ZodError) {
     const issue = err.issues[0]
