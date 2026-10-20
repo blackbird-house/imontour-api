@@ -82,9 +82,15 @@ curl -s -X PATCH $BASE/v1/trips/$ID \
 
 # Delete (204)
 curl -s -i -X DELETE $BASE/v1/trips/$ID -H "Authorization: Bearer $TOKEN"
+
+# Your profile (the user is created by the first authenticated request)
+curl -s $BASE/v1/me -H "Authorization: Bearer $TOKEN"
+curl -s -X PATCH $BASE/v1/me \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"displayName":"Ana","locale":"en-GB"}'
 ```
 
-`npm run token [uuid]` signs a token for the given user id (default `00000000-0000-4000-8000-000000000001`). It only works with `APP_ENV=local`.
+`npm run token [uuid]` signs a token whose subject is the given UUID (default `00000000-0000-4000-8000-000000000001`). It only works with `APP_ENV=local`. The matching user is created by the first request that uses the token; the same subject always resolves to the same user.
 
 ## Environments
 
@@ -118,6 +124,8 @@ Dev shares the staging project's database but is isolated in its own schema. Mig
 | `AUTH_JWKS_URL` | exactly one of this and `AUTH_JWT_SECRET` | dev, staging, prod | Public signing keys URL used to verify tokens | none |
 | `AUTH_JWT_SECRET` | exactly one of this and `AUTH_JWKS_URL` | dev, staging, prod | Legacy HS256 shared secret. Secret | none |
 | `AUTH_LOCAL_KEY_FILE` | local only | local | Local ES256 key pair file, created on first start | `.local/jwks.json` in the template |
+| `AUTH_ADMIN_URL` | no, with `AUTH_ADMIN_SERVICE_KEY` | dev, staging, prod | Supabase project URL, used to delete the auth user on `DELETE /v1/me`. Without it the provider account is left in place | none |
+| `AUTH_ADMIN_SERVICE_KEY` | no, with `AUTH_ADMIN_URL` | dev, staging, prod | Supabase service-role key for the call above. Secret, full admin rights | none |
 | `CONFIG_FILE` | no | all | Remote config document served at `GET /v1/config` | `config/remote-config.json` |
 
 Safety guards, enforced at startup (a violation throws a `ConfigError` naming the variable):
@@ -126,17 +134,50 @@ Safety guards, enforced at startup (a violation throws a `ConfigError` naming th
 - The Vercel entrypoint (`api/index.ts`) refuses `APP_ENV=local`.
 - `AUTH_LOCAL_KEY_FILE` is only allowed when `APP_ENV=local`, so self-signed local tokens can never be accepted elsewhere.
 - `AUTH_JWKS_URL` and `AUTH_JWT_SECRET` are mutually exclusive, and one of them is required outside local.
+- `AUTH_ADMIN_URL` and `AUTH_ADMIN_SERVICE_KEY` must be set together or not at all.
 - Empty strings count as unset.
 
 ## Auth
 
-The iOS app signs in with Apple through Supabase Auth and sends the resulting Supabase JWT as `Authorization: Bearer <jwt>`. The API verifies the token locally (no call to Supabase) using `AUTH_JWKS_URL` or the HS256 `AUTH_JWT_SECRET`, and enforces `iss`, `aud` and `exp`. The user id is the token's `sub`, which must be a UUID. Every trip is scoped to that user; another user's trip is a 404.
+The iOS app signs in with Apple through Supabase Auth and sends the resulting Supabase JWT as `Authorization: Bearer <jwt>`. The API verifies the token locally (no call to Supabase) using `AUTH_JWKS_URL` or the HS256 `AUTH_JWT_SECRET`, and enforces `iss`, `aud` and `exp`.
 
 If the signing keys cannot be fetched (JWKS timeout, network error, non-200 or invalid JWKS response), authenticated routes answer **503** `service_unavailable` instead of 401, so a Supabase outage does not sign users out. Clients should retry a 503 and only treat a 401 as "signed out". A token whose key id is not in the JWKS is still 401.
 
 Locally there is no Supabase: `npm run token` signs a token with the local key file that the local server trusts.
 
-`GET /v1/config` is public; everything under `/v1/trips` requires a token.
+`GET /v1/config` is public; everything under `/v1/trips` and `/v1/me` requires a token.
+
+### Users and identities
+
+Our user id does not depend on the identity provider. A token only proves "issuer X says subject Y"; the API maps that pair to its own `users.id` and uses only that id (trips reference `users.id`, never the provider subject).
+
+```
+Bearer token -> verifier -> { issuer, subject, email? }
+             -> user resolver (find-or-create in `identities`) -> users.id
+             -> routes (trips, /v1/me)
+```
+
+- **Provisioning is automatic.** The first authenticated request for an unknown `(issuer, subject)` creates the user (and copies the token's `email`, if any). It is safe under concurrent first requests: one user is created, the others pick it up (a transaction-scoped advisory lock keyed by the identity, with the `identities` primary key as backstop).
+- Only `iss`, `sub` and optionally `email` are read from the token, never provider-specific claims, so Apple, email/magic link and Google sign-in through Supabase need no code. The subject is opaque (1-255 characters).
+- Accounts are **never linked by email** (an unverified email would allow account takeover). Linking a second identity to a user is a future, explicit action.
+- Tables: `users (id, display_name, email, locale, created_at, updated_at)` and `identities (issuer, subject, user_id, created_at)` with primary key `(issuer, subject)`; `trips.user_id` references `users.id` with `on delete cascade`.
+- Migration `002_users.sql` backfills one user per distinct existing `trips.user_id` (the old Supabase user id becomes `users.id`) and links it to the configured `AUTH_ISSUER`, so existing sessions keep working and no trip data moves. It needs `AUTH_ISSUER` at migration time, which `npm run migrate` and the local server pass automatically. Run it with the same issuer the tokens carry.
+
+### Profile endpoints
+
+- `GET /v1/me`: the profile (`id`, `displayName`, `email`, `locale`, `createdAt`, `updatedAt`).
+- `PATCH /v1/me`: change `displayName` (max 100 characters) and/or `locale` (a BCP 47 tag such as `en-GB`). Absent fields are unchanged, `null` clears, at least one field is required (422 otherwise). `id` and `email` cannot be changed.
+- `DELETE /v1/me`: hard-deletes the user; their trips and identities cascade (204). Required by Apple for apps with Sign in with Apple. Afterwards the identity provider is asked to delete the sign-in account through the `IdentityProviderAdmin` port (Supabase adapter when `AUTH_ADMIN_URL` and `AUTH_ADMIN_SERVICE_KEY` are set, no-op otherwise, including locally). Provider cleanup is best effort: a failure is logged and the request still answers 204. The Supabase adapter has not been exercised against a real project yet.
+
+A token that is still valid after deletion (it lives until `exp`) provisions a fresh, empty account on the next request. Clients should drop the session after a successful delete.
+
+### Swapping auth providers later
+
+The API is configured for **one issuer** today. Multi-issuer support (`AUTH_ISSUERS` as a list, each with its own JWKS) is deliberately not built yet; this is the documented swap path:
+
+1. Add the new issuer and its JWKS to config (this is the part that needs multi-issuer support: the verifier would pick the key set by the token's `iss`).
+2. Run a one-off script that inserts `identities` rows (new issuer, new subject, existing `user_id`). No trip data moves.
+3. Remove the old issuer from config.
 
 ## Deploying
 
@@ -165,6 +206,8 @@ DATABASE_URL=... DB_SCHEMA=... APP_ENV=... AUTH_ISSUER=... AUTH_JWKS_URL=... npm
 
 `npm run migrate` loads the same config as the server (so all required variables must be present, including the auth ones) and prints the migrations it applied. Locally, `npm run dev` runs them for you.
 
+`002_users.sql` is not compatible with the previous code (the old code writes trips for users that have no `users` row, which the new foreign key rejects), so deploy right after migrating. It also needs `AUTH_ISSUER` to match the `iss` of the tokens already in use, because that is the issuer it links existing users to.
+
 ### Updating the config document
 
 Edit `config/remote-config.json` (or the file `CONFIG_FILE` points at) and ship it with a deploy. If you change a file on a long-running host, replace it atomically (write a temp file, then rename it over the original) because the file is read per request and a partial write would be served.
@@ -175,7 +218,7 @@ The Vercel wiring (rewrite, function entrypoint, bundled files) is covered by lo
 
 0. Run `npm run migrate` against this environment before the first request (see [Migrations](#migrations)).
 1. `curl https://<preview>/v1/config` returns 200 JSON. If every route returns 404, the `/v1/(.*)` to `/api` rewrite is handing the function the `/api` path instead of the original; adjust `vercel.json` / `api/index.ts`.
-2. An authenticated `GET /v1/trips` returns `{"items":[],"nextCursor":null}`.
+2. An authenticated `GET /v1/trips` returns `{"items":[],"nextCursor":null}`, and `GET /v1/me` returns the profile (creating the user on first call).
 3. `config/remote-config.json` is bundled (`includeFiles` in `vercel.json`). If `/v1/config` returns 500, check how `CONFIG_FILE` resolves in the function.
 4. A missing or invalid environment variable shows up as a cold-start failure or 500 in the Vercel function logs, with a `ConfigError` message naming the variable.
 5. Source files are not served: `curl -i https://<preview>/package.json` and `curl -i https://<preview>/src/app.ts` must both return 404, not the file.
@@ -206,10 +249,10 @@ Each test file works in its own throwaway schema.
 | `test/schemas` | Trip document validation (days, UUIDs, open strings, limits) |
 | `test/domain` | Trip summary derivation (place names, start/end day) |
 | `test/http` | ETag/If-Match parsing and cursor encoding |
-| `test/repo` | Postgres trip repository (CRUD, revisions, pagination, per-user isolation) |
-| `test/routes` | HTTP routes: trips, config, body limit |
-| `test/auth` | Token verification and local key handling |
-| `test/db` | Migrations |
+| `test/repo` | Postgres trip and user repositories (CRUD, revisions, pagination, per-user isolation, delete cascade) |
+| `test/routes` | HTTP routes: trips, `/v1/me`, config, body limit |
+| `test/auth` | Token verification, user resolver (provisioning, concurrency), provider admin adapters, local key handling |
+| `test/db` | Migrations, including the `002_users.sql` backfill |
 | `test/env.test.ts`, `test/env.examples.test.ts` | Config loading, safety guards, `env/*.example` drift |
 | `test/deps.test.ts`, `test/e2e.local.test.ts` | Dependency wiring and a full local lifecycle |
 | `test/errors.test.ts` | Error mapping (Postgres invalid-input codes to 422, generic 500) |
@@ -219,7 +262,7 @@ Each test file works in its own throwaway schema.
 
 [`openapi.json`](openapi.json) is generated from the Zod schemas and route declarations. Regenerate it with `npm run openapi` and commit the result; CI runs `npm run openapi:check` and fails if it is out of date.
 
-Operation ids: `listTrips`, `createTrip`, `getTrip`, `replaceTrip`, `renameTrip`, `deleteTrip`, `getConfig`.
+Operation ids: `listTrips`, `createTrip`, `getTrip`, `replaceTrip`, `renameTrip`, `deleteTrip`, `getMe`, `updateMe`, `deleteMe`, `getConfig`.
 
 Notes for client generation:
 
@@ -239,6 +282,7 @@ Notes for client generation:
 - **PUT** replaces the whole document and requires `If-Match`: missing is **428**, stale is **412** with `currentRevision` in the body. `id`, `revision` and `updatedAt` in the body are ignored.
 - **PATCH** only renames. `If-Match` is optional; when sent, a stale value is 412.
 - **Not yours is not found:** another user's trip, or an id that is not a UUID, returns 404.
+- **The profile has no revision**: `/v1/me` sends no `ETag` and ignores `If-Match` (last write wins).
 - **Errors** share one shape: `{"error":{"code":"...","message":"..."}}`. A 412 adds a top-level `currentRevision`.
 - **POST** takes one body schema: a trip whose `destinations` is optional (absent means `[]`, an empty trip). A client-supplied `id` and destination ids are kept; a duplicate id is 409.
 - **Content type:** request bodies must be `application/json`, otherwise 415. A request with **no** `Content-Type` and no body validates as `{}`: POST creates an empty trip (201), PUT and PATCH answer 422.
@@ -257,8 +301,8 @@ src/
   app.ts              builds the Hono app from dependencies
   deps.ts, env.ts     wiring and environment validation
   routes/, schemas/   HTTP routes and Zod schemas
-  repo/, db/          Postgres repository and client
-  auth/, http/        token verification, ETag and cursor helpers
+  repo/, db/          Postgres repositories (trips, users) and client
+  auth/, http/        token verification, user resolver, provider admin port + adapters, ETag and cursor helpers
   domain/             trip summary logic
 db/migrations/        SQL migrations (applied in filename order)
 scripts/              token, migrate, generate-openapi
