@@ -228,6 +228,15 @@ The Vercel wiring (rewrite, function entrypoint, bundled files) is covered by lo
 
 **Upgrade both Vercel and Supabase to the Pro plan before release.** Vercel Hobby is for non-commercial use only. Supabase free projects pause when idle, which would make the API unavailable.
 
+## Database browser (local only)
+
+`npm run db:browse -- <local|dev|staging|prod>` starts [Adminer](https://www.adminer.org/) in Docker and opens it pre-filled for that environment. It is bound to `127.0.0.1:8080`, lives behind the `tools` compose profile, and is never deployed. Stop it with `npm run db:browse:stop`.
+
+- `local` needs nothing. For `dev`, `staging` and `prod`, create a git-ignored `.env.<name>` from `env/<name>.env.example`; the script reads `DATABASE_URL` and `DB_SCHEMA` (dev uses the `dev` schema). `BROWSE_DATABASE_URL` overrides `DATABASE_URL` for browsing only.
+- **Prod requires `BROWSE_DATABASE_URL` for a read-only Postgres role** (the script refuses to use the API's own credentials). Create the role once in the prod Supabase project, granting `usage` on the schema and `select` on its tables.
+- The password is not put in the URL: type it into the Adminer login form.
+- Prefer the Supabase session pooler (port 5432) over the transaction pooler (6543).
+
 ## Testing
 
 ```sh

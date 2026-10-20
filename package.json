@@ -18,7 +18,9 @@
     "openapi:check": "tsx scripts/generate-openapi.ts --check",
     "migrate": "tsx scripts/migrate.ts",
     "local": "npm run db:up && npm run dev",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "db:browse": "tsx scripts/db-browse.ts",
+    "db:browse:stop": "docker compose --profile tools stop adminer"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",

@@ -16,5 +16,15 @@ services:
       timeout: 3s
       retries: 30
 
+  # Database browser (Adminer). Local only, started by `npm run db:browse`; never deploy this.
+  adminer:
+    image: adminer:5
+    profiles: ["tools"]
+    ports:
+      - "127.0.0.1:8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
 volumes:
   pgdata:
