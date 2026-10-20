@@ -426,6 +426,7 @@
   "paths": {
     "/v1/config": {
       "get": {
+        "operationId": "getConfig",
         "tags": [
           "config"
         ],
@@ -520,6 +521,7 @@
             "bearerAuth": []
           }
         ],
+        "operationId": "listTrips",
         "summary": "List trip summaries, newest first",
         "parameters": [
           {
@@ -599,6 +601,7 @@
             "bearerAuth": []
           }
         ],
+        "operationId": "createTrip",
         "summary": "Create a trip (empty or full)",
         "requestBody": {
           "required": true,
@@ -733,6 +736,7 @@
             "bearerAuth": []
           }
         ],
+        "operationId": "getTrip",
         "summary": "Get a trip",
         "parameters": [
           {
@@ -811,6 +815,7 @@
             "bearerAuth": []
           }
         ],
+        "operationId": "replaceTrip",
         "summary": "Replace a trip (revision-checked)",
         "description": "Replaces the whole trip document. The `If-Match` header is REQUIRED: it is modelled as optional in the schema only so that a missing header yields 428 instead of a 400 validation error. A stale revision yields 412 with `currentRevision`.",
         "parameters": [
@@ -972,6 +977,7 @@
             "bearerAuth": []
           }
         ],
+        "operationId": "renameTrip",
         "summary": "Rename a trip",
         "description": "Changes only the name. `If-Match` is optional here; when sent, a stale revision yields 412.",
         "parameters": [
@@ -1123,6 +1129,7 @@
             "bearerAuth": []
           }
         ],
+        "operationId": "deleteTrip",
         "summary": "Delete a trip",
         "parameters": [
           {

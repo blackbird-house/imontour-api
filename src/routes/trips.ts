@@ -142,6 +142,7 @@ const common = { tags: ['Trips'], security: [{ bearerAuth: [] }] }
 
 const listTrips = createRoute({
   ...common,
+  operationId: 'listTrips',
   method: 'get',
   path: '/v1/trips',
   summary: 'List trip summaries, newest first',
@@ -156,6 +157,7 @@ const listTrips = createRoute({
 
 const createTrip = createRoute({
   ...common,
+  operationId: 'createTrip',
   method: 'post',
   path: '/v1/trips',
   summary: 'Create a trip (empty or full)',
@@ -178,6 +180,7 @@ const createTrip = createRoute({
 
 const getTrip = createRoute({
   ...common,
+  operationId: 'getTrip',
   method: 'get',
   path: '/v1/trips/{id}',
   summary: 'Get a trip',
@@ -192,6 +195,7 @@ const getTrip = createRoute({
 
 const replaceTrip = createRoute({
   ...common,
+  operationId: 'replaceTrip',
   method: 'put',
   path: '/v1/trips/{id}',
   summary: 'Replace a trip (revision-checked)',
@@ -220,6 +224,7 @@ const replaceTrip = createRoute({
 
 const renameTrip = createRoute({
   ...common,
+  operationId: 'renameTrip',
   method: 'patch',
   path: '/v1/trips/{id}',
   summary: 'Rename a trip',
@@ -244,6 +249,7 @@ const renameTrip = createRoute({
 
 const deleteTrip = createRoute({
   ...common,
+  operationId: 'deleteTrip',
   method: 'delete',
   path: '/v1/trips/{id}',
   summary: 'Delete a trip',

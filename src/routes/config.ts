@@ -49,6 +49,7 @@ const cacheHeaders = z.object({
 })
 
 const getConfig = createRoute({
+  operationId: 'getConfig',
   method: 'get',
   path: '/config',
   tags: ['config'],

@@ -117,6 +117,20 @@ describe('OpenAPI document', () => {
     }
   })
 
+  it('assigns the agreed unique operationIds', () => {
+    const ids = Object.fromEntries(operations().map(({ path, method, op }) => [`${method} ${path}`, op.operationId]))
+    expect(ids).toEqual({
+      'get /v1/trips': 'listTrips',
+      'post /v1/trips': 'createTrip',
+      'get /v1/trips/{id}': 'getTrip',
+      'put /v1/trips/{id}': 'replaceTrip',
+      'patch /v1/trips/{id}': 'renameTrip',
+      'delete /v1/trips/{id}': 'deleteTrip',
+      'get /v1/config': 'getConfig',
+    })
+    expect(new Set(Object.values(ids)).size).toBe(7)
+  })
+
   it('has no dangling $ref', () => {
     const refs = collectRefs(doc)
     expect(refs.length).toBeGreaterThan(0)
