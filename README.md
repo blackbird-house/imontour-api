@@ -242,7 +242,8 @@ The Vercel wiring (rewrite, function entrypoint, bundled files) is covered by lo
 ## Testing
 
 ```sh
-npm test            # vitest
+npm test            # vitest (everything)
+npm run test:api    # only the black-box HTTP suite in test/api
 npm run lint        # eslint
 npm run build       # tsc --noEmit (type-check only)
 npm run format      # prettier --write . (config in .prettierrc.json; docs and README are ignored)
@@ -255,6 +256,24 @@ TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:54329/imontour_test npm
 ```
 
 Each test file works in its own throwaway schema.
+
+### Black-box API tests (`test/api`)
+
+Most tests call `app.fetch` in-process. `test/api` talks to a base URL over **real HTTP** and checks the whole contract: config ETag/304, auth failures, the trip lifecycle with `ETag`/`If-Match`/`Location`, pagination, 412/413/415/422/428, per-user isolation, `/v1/me` and the error shape.
+
+- **Default (`npm test`, CI):** the suite starts the real app with `@hono/node-server` on an ephemeral loopback port over the test database and local tokens, and stops it and drops the schema afterwards.
+- **Remote:** to check an already running server (a local dev server, or a dev/staging deployment), set all of:
+
+  ```sh
+  API_BASE_URL=https://your-dev-or-staging-host \
+  API_TEST_TOKEN=<valid access token of a dedicated test user> \
+  API_TEST_ALLOW_REMOTE=1 \
+  npm run test:api
+  ```
+
+  `API_TEST_ALLOW_REMOTE=1` is a required explicit opt-in, and the base URL must be `https` (plain `http` is accepted only for loopback hosts); otherwise the run throws before sending anything. Optional `API_TEST_TOKEN_OTHER` (a second test user) enables the "another user's trip" checks. The suite uses unique trip names and deletes every trip it creates. It skips `DELETE /v1/me` (it would delete the real test user) and the expired-token check (it cannot mint tokens).
+
+  **Never run it against production.** It writes real data to whatever server it points at; use a dedicated test user on dev or staging only.
 
 | Folder / file | Covers |
 |---|---|

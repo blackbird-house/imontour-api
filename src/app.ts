@@ -1,5 +1,6 @@
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { bodyLimit } from 'hono/body-limit'
+import { logger } from 'hono/logger'
 import { bearerAuth, type AuthVariables } from './auth/middleware.js'
 import type { IdentityProviderAdmin } from './auth/providerAdmin.js'
 import type { ResolveUser } from './auth/resolver.js'
@@ -23,9 +24,11 @@ export type Deps = {
 
 export const MAX_BODY_BYTES = 1024 * 1024
 
-/** Builds the HTTP app from its dependencies. No I/O happens here. */
-export function createApp(deps: Deps): OpenAPIHono<{ Variables: AuthVariables }> {
+/** Builds the HTTP app from its dependencies. No I/O happens here. `requestLog` logs each request to the console (local only). */
+export function createApp(deps: Deps, opts: { requestLog?: boolean } = {}): OpenAPIHono<{ Variables: AuthVariables }> {
   const app = new OpenAPIHono<{ Variables: AuthVariables }>({ defaultHook: validationHook })
+  // Registered on the app itself (not by wrapping it) so the JSON notFound/onError handlers still apply.
+  if (opts.requestLog) app.use(logger())
 
   app.onError(errorHandler)
   app.notFound(() => {
