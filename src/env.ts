@@ -51,6 +51,22 @@ function hostOf(databaseUrl: string): string {
   }
 }
 
+/**
+ * True for any host that resolves to this machine (or a Unix socket): loopback
+ * names and addresses in all common spellings, the unspecified address, and an
+ * empty host (`postgres:///db?host=/var/run/postgresql`).
+ */
+export function isLocalHost(rawHost: string): boolean {
+  const host = rawHost.replace(/\.+$/, '')
+  if (host === '') return true
+  if (LOCAL_HOSTS.has(host) || host.endsWith('.localhost')) return true
+  if (host === '::' || host === '0:0:0:0:0:0:0:1' || host === '0:0:0:0:0:0:0:0') return true
+  if (/^127(\.\d+){0,3}$/.test(host)) return true // 127.0.0.0/8, including shorthand like 127.1
+  if (/^::ffff:127(\.\d+){3}$/.test(host)) return true // IPv4-mapped loopback, dotted
+  if (/^::ffff:7f[0-9a-f]{2}:[0-9a-f]{1,4}$/.test(host)) return true // IPv4-mapped loopback, hex
+  return false
+}
+
 export function loadConfig(env: Record<string, string | undefined>): Config {
   const normalized: Record<string, string | undefined> = {}
   for (const [k, v] of Object.entries(env)) normalized[k] = v === '' ? undefined : v
@@ -77,8 +93,8 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     throw new ConfigError('AUTH_JWKS_URL or AUTH_JWT_SECRET is required (exactly one)')
   }
 
-  if (e.APP_ENV === 'prod' && LOCAL_HOSTS.has(hostOf(e.DATABASE_URL))) {
-    throw new ConfigError('DATABASE_URL must not point at a local host when APP_ENV=prod')
+  if (e.APP_ENV !== 'local' && isLocalHost(hostOf(e.DATABASE_URL))) {
+    throw new ConfigError(`DATABASE_URL must not point at a local host when APP_ENV=${e.APP_ENV}`)
   }
 
   const auth: AuthConfig = { issuer: e.AUTH_ISSUER, audience: e.AUTH_AUDIENCE }

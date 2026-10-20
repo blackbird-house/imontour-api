@@ -84,11 +84,41 @@ describe('loadConfig', () => {
     }
   })
 
-  it('rejects prod with a local database host', () => {
-    for (const host of ['localhost', '127.0.0.1', '[::1]', '0.0.0.0', 'host.docker.internal']) {
-      expect(() =>
-        loadConfig({ ...base, APP_ENV: 'prod', DATABASE_URL: `postgres://u:p@${host}:5432/app` }),
-      ).toThrow(/DATABASE_URL/)
+  const LOCAL_URLS = [
+    'postgres://u:p@localhost:5432/app',
+    'postgres://u:p@127.0.0.1:5432/app',
+    'postgres://u:p@127.8.9.10:5432/app',
+    'postgres://u:p@127.1:5432/app',
+    'postgres://u:p@[::1]:5432/app',
+    'postgres://u:p@[0:0:0:0:0:0:0:1]:5432/app',
+    'postgres://u:p@[::]:5432/app',
+    'postgres://u:p@[::ffff:127.0.0.1]:5432/app',
+    'postgres://u:p@[::ffff:7f00:2]:5432/app',
+    'postgres://u:p@0.0.0.0:5432/app',
+    'postgres://u:p@host.docker.internal:5432/app',
+    'postgres://u:p@localhost.:5432/app',
+    'postgres://u:p@LOCALHOST:5432/app',
+    'postgres://u:p@db.localhost:5432/app',
+    'postgres://u:p@db.localhost.:5432/app',
+    'postgres:///app?host=/var/run/postgresql',
+  ]
+
+  it.each(['dev', 'staging', 'prod'])('rejects every local database host when APP_ENV=%s', (appEnv) => {
+    for (const url of LOCAL_URLS) {
+      expect(() => loadConfig({ ...base, APP_ENV: appEnv, DATABASE_URL: url }), url).toThrow(/DATABASE_URL/)
+    }
+  })
+
+  it('allows every local database host when APP_ENV=local', () => {
+    for (const url of LOCAL_URLS) {
+      expect(loadConfig({ ...base, APP_ENV: 'local', DATABASE_URL: url }).databaseUrl, url).toBe(url)
+    }
+  })
+
+  it('does not mistake look-alike remote hosts for local ones', () => {
+    for (const host of ['127.example.com', 'localhost.example.com', 'mylocalhost', '128.0.0.1']) {
+      const url = `postgres://u:p@${host}:5432/app`
+      expect(loadConfig({ ...base, APP_ENV: 'prod', DATABASE_URL: url }).databaseUrl, url).toBe(url)
     }
   })
 

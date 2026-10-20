@@ -6,7 +6,7 @@ import { createTestSchema, stopTestDatabase } from './helpers/db.js'
 
 const config = loadConfig({
   APP_ENV: 'dev',
-  DATABASE_URL: 'postgres://u:p@127.0.0.1:6543/postgres',
+  DATABASE_URL: 'postgres://u:p@db.invalid:6543/postgres',
   AUTH_ISSUER: 'https://issuer.test/auth/v1',
   AUTH_JWT_SECRET: 'x'.repeat(32),
 })
