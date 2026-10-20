@@ -11,7 +11,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d imontour"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d imontour"]
       interval: 2s
       timeout: 3s
       retries: 30
