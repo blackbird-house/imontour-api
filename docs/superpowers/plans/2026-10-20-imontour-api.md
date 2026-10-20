@@ -74,7 +74,7 @@ test/**                   mirrors src/; test/helpers/{db,app}.ts
 
 **Interfaces:** Produces npm scripts: `dev`, `build` (`tsc --noEmit`), `lint`, `test`, `db:up` (`docker compose up -d --wait`), `db:down`, `token`, `openapi`, `openapi:check`. Test Postgres URL default `postgres://postgres:postgres@localhost:54329/imontour_test`, overridable by `TEST_DATABASE_URL`.
 
-- [ ] **Step 1:** `git init -b main`, add remote `origin https://github.com/blackbird-house/imontour-api.git`. `.gitignore` covers `node_modules`, `.env*` (but not `env/*.example`), `.vercel`, `.local/`, `dist`. Commit the existing `docs/` on `main` as `docs: add API design and implementation plan`. Then `git switch -c feat/trips-api`.
+- [ ] **Step 1:** `git init -b master`, add remote `origin https://github.com/blackbird-house/imontour-api.git`. `.gitignore` covers `node_modules`, `.env*` (but not `env/*.example`), `.vercel`, `.local/`, `dist`. Commit the existing `docs/` on `master` as `docs: add API design and implementation plan`. Then `git switch -c feat/trips-api`.
 - [ ] **Step 2:** Create the files above. `docker-compose.yml`: one `postgres:16` service, port `54329:5432`, user/password `postgres`, databases `imontour` (dev) and `imontour_test`, healthcheck so `--wait` works. `tsconfig`: strict, `module: NodeNext`, `target: ES2022`. `vitest.config.ts`: `include: ['test/**/*.test.ts']`, `fileParallelism: false`.
 - [ ] **Step 3: Write failing smoke test** `test/smoke.test.ts`: `expect(1 + 1).toBe(2)`. Run `npm test` → PASS once tooling works; run `npm run lint` and `npm run build` → both succeed with no output errors.
 - [ ] **Step 4: Commit** `chore: scaffold TypeScript project with Vitest, ESLint, docker-compose`.
@@ -255,14 +255,14 @@ Default document: `{"schemaVersion":1,"flags":{}}` (no version fields = no const
 
 **Files:** Create `README.md`, `.github/workflows/ci.yml`.
 
-- [ ] **Step 1:** README sections: what this is; quick start for local (docker, `.env`, migrate, dev, token, curl examples); the four environments and which variables each needs (table of every env var); how to create the Supabase project (enable Apple provider, copy pooled connection string, JWKS/issuer values) and the Vercel project (env vars per target, Preview=dev, `staging` branch, `main`=prod); the Supabase layout (two projects, staging and prod; dev runs on the staging project with `DB_SCHEMA=dev`); **a bold reminder to upgrade Vercel and Supabase to Pro before release**; running tests; regenerating OpenAPI; deployment migration step (`npm run migrate` against the target `DATABASE_URL`); pointer to the spec.
-- [ ] **Step 2:** `ci.yml` on `pull_request` and push to `main`: Node 22, `npm ci`, Postgres 16 service container, `npm run lint`, `npm run build`, `npm test` (with `TEST_DATABASE_URL`), `npm run openapi:check`.
+- [ ] **Step 1:** README sections: what this is; quick start for local (docker, `.env`, migrate, dev, token, curl examples); the four environments and which variables each needs (table of every env var); how to create the Supabase project (enable Apple provider, copy pooled connection string, JWKS/issuer values) and the Vercel project (env vars per target, Preview=dev, `staging` branch, `master`=prod); the Supabase layout (two projects, staging and prod; dev runs on the staging project with `DB_SCHEMA=dev`); **a bold reminder to upgrade Vercel and Supabase to Pro before release**; running tests; regenerating OpenAPI; deployment migration step (`npm run migrate` against the target `DATABASE_URL`); pointer to the spec.
+- [ ] **Step 2:** `ci.yml` on `pull_request` and push to `master`: Node 22, `npm ci`, Postgres 16 service container, `npm run lint`, `npm run build`, `npm test` (with `TEST_DATABASE_URL`), `npm run openapi:check`.
 - [ ] **Step 3:** Verify locally: `npm run lint && npm run build && npm test && npm run openapi:check` → all exit 0. **Step 4: Commit** `docs: add README and CI workflow`.
 
 ### Task 13: Hand over for review (no push)
 
 - [ ] **Step 1:** Run the full check: `npm run lint && npm run build && npm test && npm run openapi:check` → all exit 0. Confirm `git status` is clean and the history on `feat/trips-api` is small, readable commits.
-- [ ] **Step 2:** Do **not** push and do **not** open a PR. Report to the user: the branch name, commit list, how to run locally, and the list of builder calls from the spec's "Resolved details". Wait for the user to ask to push; then (and only then) push, `gh pr create --base main` with the closing line from Global Constraints, never merge, and bind the PR with the app's PR tools.
+- [ ] **Step 2:** Do **not** push and do **not** open a PR. Report to the user: the branch name, commit list, how to run locally, and the list of builder calls from the spec's "Resolved details". Wait for the user to ask to push; then (and only then) push, `gh pr create --base master` with the closing line from Global Constraints, never merge, and bind the PR with the app's PR tools.
 - [ ] **Step 3:** Remind the user to upgrade Vercel and Supabase to Pro before release.
 
 ---

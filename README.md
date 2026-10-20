@@ -9,7 +9,7 @@ TypeScript, Hono, Postgres. Runs locally as a Node server and in deployed enviro
 
 ## Quick start (local)
 
-Prerequisites: Node 22 and Docker (for the local Postgres).
+Prerequisites: Node 22.9+ (`.nvmrc` pins 22; 22.9 is needed for `--env-file-if-exists`) and Docker (for the local Postgres).
 
 ```sh
 npm ci
@@ -35,6 +35,8 @@ curl -s $BASE/v1/config
 curl -s -i -X POST $BASE/v1/trips \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"name":"Japan 2027"}'
+#   HTTP/1.1 201 Created, ETag: "1", Location: /v1/trips/<id>
+#   {"schemaVersion":1,"id":"<id>","name":"Japan 2027","revision":1,"updatedAt":"2026-10-20T09:00:00.000Z","destinations":[]}
 
 # Create a full trip with two destinations
 curl -s -X POST $BASE/v1/trips \
@@ -99,7 +101,7 @@ Only **two Supabase projects** exist: staging and prod.
 | local | Docker Postgres (`docker-compose.yml`) | `public` | your machine |
 | dev | staging Supabase project | `dev` (`DB_SCHEMA=dev`) | Vercel Preview |
 | staging | staging Supabase project | `public` | Vercel, `staging` branch |
-| prod | prod Supabase project | `public` | Vercel, `main` branch |
+| prod | prod Supabase project | `public` | Vercel, `master` branch |
 
 Dev shares the staging project's database but is isolated in its own schema. Migrations create the schema if it is missing.
 
@@ -120,7 +122,8 @@ Dev shares the staging project's database but is isolated in its own schema. Mig
 
 Safety guards, enforced at startup (a violation throws a `ConfigError` naming the variable):
 
-- `APP_ENV=prod` refuses a `DATABASE_URL` that points at a local host (`localhost`, `127.0.0.1`, `::1`, `0.0.0.0`, `host.docker.internal`).
+- `APP_ENV=dev`, `staging` and `prod` refuse a `DATABASE_URL` that points at a local host: `localhost` (also `localhost.` and `*.localhost`), any `127.0.0.0/8` address, `::1` in any spelling, `::`, IPv4-mapped loopback (`::ffff:127.0.0.1`), `0.0.0.0`, `host.docker.internal`, or an empty host (a Unix socket, `postgres:///db?host=/var/run/postgresql`). `APP_ENV=local` is unrestricted.
+- The Vercel entrypoint (`api/index.ts`) refuses `APP_ENV=local`.
 - `AUTH_LOCAL_KEY_FILE` is only allowed when `APP_ENV=local`, so self-signed local tokens can never be accepted elsewhere.
 - `AUTH_JWKS_URL` and `AUTH_JWT_SECRET` are mutually exclusive, and one of them is required outside local.
 - Empty strings count as unset.
@@ -128,6 +131,8 @@ Safety guards, enforced at startup (a violation throws a `ConfigError` naming th
 ## Auth
 
 The iOS app signs in with Apple through Supabase Auth and sends the resulting Supabase JWT as `Authorization: Bearer <jwt>`. The API verifies the token locally (no call to Supabase) using `AUTH_JWKS_URL` or the HS256 `AUTH_JWT_SECRET`, and enforces `iss`, `aud` and `exp`. The user id is the token's `sub`, which must be a UUID. Every trip is scoped to that user; another user's trip is a 404.
+
+If the signing keys cannot be fetched (JWKS timeout, network error, non-200 or invalid JWKS response), authenticated routes answer **503** `service_unavailable` instead of 401, so a Supabase outage does not sign users out. Clients should retry a 503 and only treat a 401 as "signed out". A token whose key id is not in the JWKS is still 401.
 
 Locally there is no Supabase: `npm run token` signs a token with the local key file that the local server trusts.
 
@@ -146,13 +151,13 @@ Locally there is no Supabase: `npm run token` signs a token with the local key f
 
 1. Create one Vercel project from this repo. `vercel.json` rewrites `/v1/(.*)` to the `api/index.ts` function and bundles `config/**`.
 2. Set environment variables per target, using the templates in `env/`:
-   - Preview: the **dev** set (staging project, `DB_SCHEMA=dev`, `APP_ENV=dev`).
-   - Branch `staging`: the **staging** set.
-   - Production (`main`): the **prod** set.
+   - Preview deployments: the **dev** set (staging project, `DB_SCHEMA=dev`, `APP_ENV=dev`), with a branch-scoped override for branch `staging` (the **staging** set) that must take precedence over the generic Preview (dev) variables.
+   - Production (`master`): the **prod** set.
+3. `public/` is committed empty on purpose: with the "Other" framework preset Vercel serves `public/` as static output, and without it may serve the repository root. Do not delete it.
 
 ### Migrations
 
-Migrations are **not** run on request or at function start. Run them as a deploy step, against the target environment's variables:
+Migrations are **not** run on request or at function start, and **nothing in CI or Vercel runs them**. Apply them yourself against the target environment **before the new code goes live** (before promoting or merging a change that needs them):
 
 ```sh
 DATABASE_URL=... DB_SCHEMA=... APP_ENV=... AUTH_ISSUER=... AUTH_JWKS_URL=... npm run migrate
@@ -168,11 +173,17 @@ Edit `config/remote-config.json` (or the file `CONFIG_FILE` points at) and ship 
 
 The Vercel wiring (rewrite, function entrypoint, bundled files) is covered by local tests but **has not been verified against a real Vercel deploy yet**. On the first deploy, check:
 
+0. Run `npm run migrate` against this environment before the first request (see [Migrations](#migrations)).
 1. `curl https://<preview>/v1/config` returns 200 JSON. If every route returns 404, the `/v1/(.*)` to `/api` rewrite is handing the function the `/api` path instead of the original; adjust `vercel.json` / `api/index.ts`.
 2. An authenticated `GET /v1/trips` returns `{"items":[],"nextCursor":null}`.
 3. `config/remote-config.json` is bundled (`includeFiles` in `vercel.json`). If `/v1/config` returns 500, check how `CONFIG_FILE` resolves in the function.
 4. A missing or invalid environment variable shows up as a cold-start failure or 500 in the Vercel function logs, with a `ConfigError` message naming the variable.
-5. `hono/vercel` is deprecated in Hono 4.13 and moves to `@hono/vercel` in Hono v5. Plan the swap when upgrading.
+5. Source files are not served: `curl -i https://<preview>/package.json` and `curl -i https://<preview>/src/app.ts` must both return 404, not the file.
+6. `hono/vercel` is deprecated in Hono 4.13 and moves to `@hono/vercel` in Hono v5. Plan the swap when upgrading.
+
+## Before release: upgrade Vercel and Supabase to Pro
+
+**Upgrade both Vercel and Supabase to the Pro plan before release.** Vercel Hobby is for non-commercial use only. Supabase free projects pause when idle, which would make the API unavailable.
 
 ## Testing
 
@@ -201,6 +212,7 @@ Each test file works in its own throwaway schema.
 | `test/db` | Migrations |
 | `test/env.test.ts`, `test/env.examples.test.ts` | Config loading, safety guards, `env/*.example` drift |
 | `test/deps.test.ts`, `test/e2e.local.test.ts` | Dependency wiring and a full local lifecycle |
+| `test/errors.test.ts` | Error mapping (Postgres invalid-input codes to 422, generic 500) |
 | `test/openapi.test.ts` | OpenAPI document generation |
 
 ## OpenAPI
@@ -214,7 +226,12 @@ Notes for client generation:
 - `color`, `place.type` and `timing.mode` are **open strings, never enums**. Clients must accept unknown values and ignore unknown fields. The OpenAPI descriptions list the known values.
 - Day fields (`startDay`, `endDay`) are `yyyy-MM-dd` strings with no time or zone.
 - The iOS `tripID` is `id` in the API.
-- Ids are RFC UUIDs. Nil or hand-made UUIDs (wrong version/variant bits) are rejected with 422.
+- Ids are RFC UUIDs. In request bodies, nil or hand-made UUIDs (wrong version/variant bits) are rejected with 422; a bad id in the path is simply a 404.
+- The trip `id` is returned lowercase. Destination ids are returned exactly as sent (iOS `UUID().uuidString` is uppercase), so compare ids as `UUID` values, not strings.
+- Timestamps (`updatedAt`) carry fractional seconds, e.g. `2026-10-20T16:22:19.857Z`. Swift decoders need `.withFractionalSeconds`, e.g. `ISO8601DateTranscoder(options: [.withInternetDateTime, .withFractionalSeconds])` for swift-openapi-generator, or a custom `JSONDecoder.dateDecodingStrategy`.
+- `schemaVersion` is an integer; only `1` exists. Treat a value above 1 as unsupported.
+- `If-Match` is documented as required on PUT; a request without it gets 428.
+- Authenticated operations can answer 503 when the auth key service is unreachable (see [Auth](#auth)).
 
 ## API behavior notes
 
@@ -223,15 +240,13 @@ Notes for client generation:
 - **PATCH** only renames. `If-Match` is optional; when sent, a stale value is 412.
 - **Not yours is not found:** another user's trip, or an id that is not a UUID, returns 404.
 - **Errors** share one shape: `{"error":{"code":"...","message":"..."}}`. A 412 adds a top-level `currentRevision`.
-- **POST** with a `destinations` key is a full trip (a client-supplied `id` and destination ids are kept; a duplicate id is 409). Otherwise it is name-only, and a POST with no body creates an empty trip.
-- **Content type:** request bodies must be `application/json`, otherwise 415.
+- **POST** takes one body schema: a trip whose `destinations` is optional (absent means `[]`, an empty trip). A client-supplied `id` and destination ids are kept; a duplicate id is 409.
+- **Content type:** request bodies must be `application/json`, otherwise 415. A request with **no** `Content-Type` and no body validates as `{}`: POST creates an empty trip (201), PUT and PATCH answer 422.
+- **Unknown fields** in request bodies are stripped, not stored.
+- **Text:** strings containing a NUL character or an unpaired UTF-16 surrogate are rejected with 422 (Postgres cannot store them).
 - **Limits:** 1 MB body (413) and at most 200 destinations (422).
-- **List:** `limit` defaults to 20 (max 100); `nextCursor` is an opaque string, `null` on the last page; a bad cursor is 400.
+- **List:** `limit` defaults to 20 (max 100); `nextCursor` is an opaque string, `null` on the last page; a bad cursor is 400. Pagination never returns a duplicate, but a trip edited between page requests (for example from another device) moves to the front and can be missing from that traversal until the list is reloaded from page 1.
 - `GET /v1/config` is public, sends an `ETag` and `Cache-Control: no-cache`, and answers 304 to a matching `If-None-Match`.
-
-## Before release: upgrade Vercel and Supabase to Pro
-
-**Upgrade both Vercel and Supabase to the Pro plan before release.** Vercel Hobby is for non-commercial use only. Supabase free projects pause when idle, which would make the API unavailable.
 
 ## Project layout
 
@@ -256,4 +271,4 @@ openapi.json          generated API description
 
 ## Git workflow
 
-Work on feature branches and open pull requests; do not merge without review. CI (`.github/workflows/ci.yml`) runs lint, type-check, tests against Postgres 16, and the OpenAPI check on every pull request and on pushes to `main`.
+Work on feature branches and open pull requests; do not merge without review. CI (`.github/workflows/ci.yml`) runs lint, type-check, tests against Postgres 16, and the OpenAPI check on every pull request and on pushes to `master`.
