@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { runMigrations } from '../../src/db/client.js'
+import { createDb, runMigrations } from '../../src/db/client.js'
 import { createTestSchema, stopTestDatabase } from '../helpers/db.js'
 
 describe('runMigrations', () => {
@@ -42,5 +42,17 @@ describe('runMigrations', () => {
 
   it('rejects unsafe schema names', async () => {
     await expect(runMigrations(ctx.db, 'x"; drop schema public; --')).rejects.toThrow(/invalid schema/i)
+  })
+})
+
+describe('createDb', () => {
+  it('sets a 10 s connect timeout and keeps prepare off, without connecting', async () => {
+    const db = createDb('postgres://u:p@db.invalid:5432/app')
+    try {
+      expect(db.options.connect_timeout).toBe(10)
+      expect(db.options.prepare).toBe(false)
+    } finally {
+      await db.end({ timeout: 0 })
+    }
   })
 })

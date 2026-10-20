@@ -78,6 +78,7 @@ export function configRoute(source: RemoteConfigSource): OpenAPIHono {
     const { body, etag } = await source()
     const headers = { ETag: etag, 'Cache-Control': 'no-cache' }
     if (matchesIfNoneMatch(c.req.header('If-None-Match'), etag)) {
+      // Cast: the library's typed responses do not model a body-less 304; the response itself is correct.
       return c.body(null, 304, headers) as never
     }
     return c.json(body as z.infer<typeof remoteConfigSchema>, 200, headers)

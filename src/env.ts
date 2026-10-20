@@ -111,3 +111,14 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     configFile: e.CONFIG_FILE,
   }
 }
+
+/**
+ * Guard for the Vercel entrypoint: a serverless deployment is never `local`
+ * (that mode trusts local hosts and a local key file). Returns the config unchanged.
+ */
+export function assertVercelConfig(config: Config): Config {
+  if (config.appEnv === 'local') {
+    throw new ConfigError('APP_ENV=local is not allowed on Vercel; use dev, staging or prod')
+  }
+  return config
+}

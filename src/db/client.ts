@@ -17,6 +17,8 @@ export function createDb(databaseUrl: string, opts: { max?: number } = {}): Db {
     prepare: false,
     max: opts.max ?? 5,
     idle_timeout: 20,
+    // Seconds. Fail a request quickly instead of hanging when the database is unreachable.
+    connect_timeout: 10,
     onnotice: () => {},
   })
 }

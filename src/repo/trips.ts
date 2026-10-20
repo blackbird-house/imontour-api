@@ -103,6 +103,8 @@ export function createTripRepo(db: Db, schema: string): TripRepo {
       const id = input.id ?? randomUUID()
       const now = new Date()
       try {
+        // `as never` (here and in replace): postgres.js types db.json() too narrowly for
+        // our typed objects; a typing gap in the library, the value is plain JSON.
         const rows = await db<TripRow[]>`
           insert into ${trips}.trips
             (user_id, id, name, schema_version, revision, destinations, created_at, updated_at)
@@ -118,6 +120,7 @@ export function createTripRepo(db: Db, schema: string): TripRepo {
     },
 
     async replace(userId, id, expectedRevision, input) {
+      // `as never`: see create().
       const rows = await db<TripRow[]>`
         update ${trips}.trips
         set name = ${input.name ?? null},

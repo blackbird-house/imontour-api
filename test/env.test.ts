@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ConfigError, loadConfig } from '../src/env.js'
+import { assertVercelConfig, ConfigError, loadConfig } from '../src/env.js'
 
 const base = {
   APP_ENV: 'dev',
@@ -124,5 +124,18 @@ describe('loadConfig', () => {
 
   it('allows a remote database in prod', () => {
     expect(loadConfig({ ...base, APP_ENV: 'prod' }).appEnv).toBe('prod')
+  })
+})
+
+describe('assertVercelConfig', () => {
+  it('refuses APP_ENV=local (Vercel is never local)', () => {
+    const local = loadConfig({ ...base, APP_ENV: 'local', DATABASE_URL: 'postgres://u:p@localhost:5432/app' })
+    expect(() => assertVercelConfig(local)).toThrow(ConfigError)
+    expect(() => assertVercelConfig(local)).toThrow(/APP_ENV=local/)
+  })
+
+  it.each(['dev', 'staging', 'prod'])('passes APP_ENV=%s through unchanged', (appEnv) => {
+    const config = loadConfig({ ...base, APP_ENV: appEnv })
+    expect(assertVercelConfig(config)).toBe(config)
   })
 })

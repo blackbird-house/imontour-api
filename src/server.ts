@@ -14,7 +14,7 @@ async function main(): Promise<void> {
     const applied = await runMigrations(db, config.dbSchema)
     for (const file of applied) console.log(`applied ${file}`)
   }
-  // Deployed environments run `npm run migrate` during deploy, never at startup.
+  // Deployed environments never migrate at startup: run `npm run migrate` before deploying.
 
   const app = createApp(buildDeps(config, db))
   const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
@@ -25,6 +25,8 @@ async function main(): Promise<void> {
   const shutdown = (): void => {
     if (stopping) return
     stopping = true
+    // Last resort if draining hangs (a stuck request or db.end); unref'd so it never keeps the process alive.
+    setTimeout(() => process.exit(1), 10_000).unref()
     server.close(() => {
       db.end({ timeout: 5 }).then(
         () => process.exit(0),
