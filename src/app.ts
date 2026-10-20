@@ -29,8 +29,10 @@ export function createApp(deps: Deps): OpenAPIHono<{ Variables: AuthVariables }>
 
   // Authenticate before reading any body, so anonymous callers always get 401.
   app.use('/v1/trips/*', bearerAuth(deps.verify))
-  app.use(
-    '/v1/*',
+  // Only routes that accept a body are limited, so GET/DELETE never answer 413.
+  app.on(
+    ['POST', 'PUT', 'PATCH'],
+    ['/v1/trips', '/v1/trips/*'],
     bodyLimit({
       maxSize: MAX_BODY_BYTES,
       onError: () => {

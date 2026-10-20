@@ -43,6 +43,11 @@ const remoteConfigSchema = z
       'malformed fields mean "no constraint"; clients fail open.',
   })
 
+const cacheHeaders = z.object({
+  ETag: z.string().openapi({ description: 'Quoted content hash of the config.', example: '"3f2a9c1d5e7b8a40"' }),
+  'Cache-Control': z.string().openapi({ description: 'Always `no-cache`: revalidate with `If-None-Match`.', example: 'no-cache' }),
+})
+
 const getConfig = createRoute({
   method: 'get',
   path: '/config',
@@ -57,10 +62,10 @@ const getConfig = createRoute({
   responses: {
     200: {
       description: 'The remote config document.',
-      headers: z.object({ ETag: z.string().openapi({ example: '"3f2a9c1d5e7b8a40"' }) }),
+      headers: cacheHeaders,
       content: { 'application/json': { schema: remoteConfigSchema } },
     },
-    304: { description: 'Not modified; the ETag is unchanged.' },
+    304: { description: 'Not modified; the ETag is unchanged.', headers: cacheHeaders },
     500: { description: 'Config file missing or unparsable.', content: { 'application/json': { schema: errorSchema } } },
   },
 })

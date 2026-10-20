@@ -132,6 +132,7 @@ const errors = {
   unsupportedMediaType: errorResponse('Request body is not application/json.'),
   unprocessable: errorResponse('Body is valid JSON but violates the schema.'),
   preconditionRequired: errorResponse('If-Match header is required.'),
+  internal: errorResponse('Unexpected server error.'),
 }
 
 const common = { tags: ['Trips'], security: [{ bearerAuth: [] }] }
@@ -149,6 +150,7 @@ const listTrips = createRoute({
     200: { description: 'A page of trip summaries.', content: { 'application/json': { schema: tripListSchema } } },
     400: errors.badRequest,
     401: errors.unauthorized,
+    500: errors.internal,
   },
 })
 
@@ -170,6 +172,7 @@ const createTrip = createRoute({
     413: errors.payloadTooLarge,
     415: errors.unsupportedMediaType,
     422: errors.unprocessable,
+    500: errors.internal,
   },
 })
 
@@ -183,6 +186,7 @@ const getTrip = createRoute({
     200: tripResponse('The trip.'),
     401: errors.unauthorized,
     404: errors.notFound,
+    500: errors.internal,
   },
 })
 
@@ -191,6 +195,10 @@ const replaceTrip = createRoute({
   method: 'put',
   path: '/v1/trips/{id}',
   summary: 'Replace a trip (revision-checked)',
+  description:
+    'Replaces the whole trip document. The `If-Match` header is REQUIRED: it is modelled as optional ' +
+    'in the schema only so that a missing header yields 428 instead of a 400 validation error. ' +
+    'A stale revision yields 412 with `currentRevision`.',
   request: {
     params: idParams,
     headers: ifMatchRequired,
@@ -206,6 +214,7 @@ const replaceTrip = createRoute({
     415: errors.unsupportedMediaType,
     422: errors.unprocessable,
     428: errors.preconditionRequired,
+    500: errors.internal,
   },
 })
 
@@ -214,6 +223,7 @@ const renameTrip = createRoute({
   method: 'patch',
   path: '/v1/trips/{id}',
   summary: 'Rename a trip',
+  description: 'Changes only the name. `If-Match` is optional here; when sent, a stale revision yields 412.',
   request: {
     params: idParams,
     headers: ifMatchOptional,
@@ -228,6 +238,7 @@ const renameTrip = createRoute({
     413: errors.payloadTooLarge,
     415: errors.unsupportedMediaType,
     422: errors.unprocessable,
+    500: errors.internal,
   },
 })
 
@@ -241,6 +252,7 @@ const deleteTrip = createRoute({
     204: { description: 'Deleted.' },
     401: errors.unauthorized,
     404: errors.notFound,
+    500: errors.internal,
   },
 })
 
