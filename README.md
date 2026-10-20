@@ -107,7 +107,7 @@ Only **two Supabase projects** exist: staging and prod.
 | local | Docker Postgres (`docker-compose.yml`) | `public` | your machine |
 | dev | staging Supabase project | `dev` (`DB_SCHEMA=dev`) | Vercel Preview |
 | staging | staging Supabase project | `public` | Vercel, `staging` branch |
-| prod | prod Supabase project | `public` | Vercel, `master` branch |
+| prod | prod Supabase project | `public` | Vercel, `main` branch |
 
 Dev shares the staging project's database but is isolated in its own schema. Migrations create the schema if it is missing.
 
@@ -193,7 +193,7 @@ The API is configured for **one issuer** today. Multi-issuer support (`AUTH_ISSU
 1. Create one Vercel project from this repo. `vercel.json` rewrites `/v1/(.*)` to the `api/index.ts` function and bundles `config/**`.
 2. Set environment variables per target, using the templates in `env/`:
    - Preview deployments: the **dev** set (staging project, `DB_SCHEMA=dev`, `APP_ENV=dev`), with a branch-scoped override for branch `staging` (the **staging** set) that must take precedence over the generic Preview (dev) variables.
-   - Production (`master`): the **prod** set.
+   - Production (`main`): the **prod** set.
 3. `public/` is committed empty on purpose: with the "Other" framework preset Vercel serves `public/` as static output, and without it may serve the repository root. Do not delete it.
 
 ### Migrations
@@ -324,4 +324,4 @@ openapi.json          generated API description
 
 ## Git workflow
 
-Work on feature branches and open pull requests; do not merge without review. CI (`.github/workflows/ci.yml`) runs lint, type-check, tests against Postgres 16, and the OpenAPI check on every pull request and on pushes to `master`.
+Work on feature branches and open pull requests; do not merge without review. CI (`.github/workflows/ci.yml`) runs lint, type-check, tests against Postgres 16, and the OpenAPI check on every pull request and on pushes to `main`.

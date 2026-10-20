@@ -185,4 +185,4 @@ Four environments: **local, dev, staging, prod**. They mirror the iOS app's Dev 
 - **dev, staging, prod:** each is a Vercel deployment target plus a Supabase project, configured only through env vars (see `.env.example` per environment; real values live in Vercel/Supabase, never in git).
 - Supabase layout (user decision): only two Supabase projects, **staging** and **prod**. `local` uses Docker Postgres. `dev` runs on the staging project in its own schema (`DB_SCHEMA=dev`), so dev and staging data stay separate. The code only takes a connection string and `DB_SCHEMA`, so giving dev its own project later is a config change.
 - Pushing (user decision): do not push or open a PR until the user asks to review the changes first.
-- Vercel maps naturally: preview deployments for dev, a staging branch for staging, master for prod, each with its own env var set.
+- Vercel maps naturally: preview deployments for dev, a staging branch for staging, main for prod, each with its own env var set.
