@@ -596,6 +596,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "The token could not be checked because the auth key service is unreachable. Retry later; do not sign the user out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       },
@@ -721,6 +731,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "The token could not be checked because the auth key service is unreachable. Retry later; do not sign the user out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -795,6 +815,16 @@
           },
           "500": {
             "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The token could not be checked because the auth key service is unreachable. Retry later; do not sign the user out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -964,6 +994,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "The token could not be checked because the auth key service is unreachable. Retry later; do not sign the user out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       },
@@ -1116,6 +1156,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "The token could not be checked because the auth key service is unreachable. Retry later; do not sign the user out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       },
@@ -1170,6 +1220,16 @@
           },
           "500": {
             "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The token could not be checked because the auth key service is unreachable. Retry later; do not sign the user out.",
             "content": {
               "application/json": {
                 "schema": {

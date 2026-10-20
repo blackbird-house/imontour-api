@@ -1,8 +1,9 @@
 import { describe, expect, it, beforeAll } from 'vitest'
 import { Hono } from 'hono'
+import { errors as joseErrors, type JWTVerifyGetKey } from 'jose'
 import { createVerifier } from '../../src/auth/verifier.js'
 import { bearerAuth, type AuthVariables } from '../../src/auth/middleware.js'
-import { errorHandler, UnauthorizedError } from '../../src/errors.js'
+import { ApiError, errorHandler, UnauthorizedError } from '../../src/errors.js'
 import {
   TEST_AUDIENCE,
   TEST_ISSUER,
@@ -109,6 +110,68 @@ describe('createVerifier (secret mode)', () => {
 
   it('rejects an ES256 token', async () => {
     await expect(secretVerify(await signToken(kp))).rejects.toBeInstanceOf(UnauthorizedError)
+  })
+
+  it('rejects the wrong issuer', async () => {
+    await expect(secretVerify(await signHs256(secret, { iss: 'https://evil.test' }))).rejects.toBeInstanceOf(
+      UnauthorizedError,
+    )
+  })
+
+  it('rejects the wrong audience', async () => {
+    await expect(secretVerify(await signHs256(secret, { aud: 'other' }))).rejects.toBeInstanceOf(UnauthorizedError)
+  })
+
+  it('rejects an expired token', async () => {
+    await expect(secretVerify(await signHs256(secret, { exp: now() - 3600 }))).rejects.toBeInstanceOf(
+      UnauthorizedError,
+    )
+  })
+})
+
+describe('createVerifier construction', () => {
+  it('throws a plain configuration Error when no key source resolves', () => {
+    let thrown: unknown
+    try {
+      createVerifier({ issuer: TEST_ISSUER, audience: TEST_AUDIENCE })
+    } catch (err) {
+      thrown = err
+    }
+    expect(thrown).toBeInstanceOf(Error)
+    expect(thrown).not.toBeInstanceOf(ApiError)
+    expect((thrown as Error).message).toMatch(/no key source/i)
+  })
+
+  it('accepts injected keys without any configured source', () => {
+    expect(() => createVerifier({ issuer: TEST_ISSUER, audience: TEST_AUDIENCE }, async () => kp.publicKey)).not.toThrow()
+  })
+})
+
+describe('createVerifier (key service failures)', () => {
+  const throwing =
+    (err: unknown): JWTVerifyGetKey =>
+    async () => {
+      throw err
+    }
+
+  async function failure(getKey: JWTVerifyGetKey): Promise<unknown> {
+    const v = createVerifier(auth, getKey)
+    return v(await signToken(kp)).catch((e: unknown) => e)
+  }
+
+  it.each([
+    ['a JWKS timeout', new joseErrors.JWKSTimeout()],
+    ['an invalid JWKS response', new joseErrors.JWKSInvalid()],
+    ['a non-200 JWKS response', new joseErrors.JOSEError('Expected 200 OK from the JSON Web Key Set HTTP response')],
+    ['a network error', new TypeError('fetch failed')],
+  ])('maps %s to 503 service_unavailable', async (_label, err) => {
+    const e = await failure(throwing(err))
+    expect(e).toBeInstanceOf(ApiError)
+    expect(e).toMatchObject({ status: 503, code: 'service_unavailable', message: 'Authentication service unavailable' })
+  })
+
+  it('keeps no matching key a 401', async () => {
+    expect(await failure(throwing(new joseErrors.JWKSNoMatchingKey()))).toBeInstanceOf(UnauthorizedError)
   })
 })
 

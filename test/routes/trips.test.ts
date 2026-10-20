@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createApp } from '../../src/app.js'
+import { authUnavailable } from '../../src/auth/verifier.js'
 import { encodeCursor } from '../../src/http/cursor.js'
 import type { TripRepo } from '../../src/repo/trips.js'
 import { createTestApp, stubRemoteConfig } from '../helpers/app.js'
@@ -705,6 +706,20 @@ describe('authentication', () => {
   it.each(routes)('%s %s with a non-bearer scheme is 401', async (method, path, json) => {
     const res = await t.request(path, { method, json, headers: { Authorization: 'Basic dXNlcjpwYXNz' } })
     await expectError(res, 401, 'unauthorized')
+  })
+})
+
+describe('auth key service outage', () => {
+  it('answers 503 service_unavailable, not 401', async () => {
+    const app = createApp({
+      repo: {} as TripRepo,
+      verify: async () => {
+        throw authUnavailable()
+      },
+      remoteConfig: stubRemoteConfig,
+    })
+    const res = await app.request('/v1/trips', { headers: { Authorization: 'Bearer x' } })
+    await expectError(res, 503, 'service_unavailable')
   })
 })
 

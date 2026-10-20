@@ -135,6 +135,12 @@ describe('OpenAPI document', () => {
     }
   })
 
+  it('declares 503 on every authenticated operation and nowhere else', () => {
+    for (const { path, method, op } of operations()) {
+      expect(op.responses['503'] !== undefined, `${method} ${path} 503`).toBe((op.security ?? []).length > 0)
+    }
+  })
+
   it('gives every operation a summary and tags', () => {
     for (const { path, method, op } of operations()) {
       expect(op.summary, `${method} ${path}`).toBeTruthy()

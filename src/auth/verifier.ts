@@ -1,12 +1,42 @@
-import { createLocalJWKSet, createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose'
+import { createLocalJWKSet, createRemoteJWKSet, errors, jwtVerify, type JWTVerifyGetKey } from 'jose'
 import type { AuthConfig } from '../env.js'
-import { UnauthorizedError } from '../errors.js'
+import { ApiError, UnauthorizedError } from '../errors.js'
 import { readLocalKeyFile } from './localKeys.js'
 
 export type VerifyToken = (token: string) => Promise<{ userId: string }>
 
 const ASYMMETRIC_ALGS = ['ES256', 'RS256', 'EdDSA']
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export const authUnavailable = () => new ApiError(503, 'service_unavailable', 'Authentication service unavailable')
+
+/**
+ * True when the key getter failed to obtain keys at all (timeout, network
+ * error, non-200 or unparsable JWKS response), as opposed to the token being
+ * bad. jose reports a non-200 or non-JSON response as a bare JOSEError.
+ */
+function isKeyFetchFailure(err: unknown): boolean {
+  if (!(err instanceof errors.JOSEError)) return true
+  return (
+    err instanceof errors.JWKSTimeout ||
+    err instanceof errors.JWKSInvalid ||
+    err.code === errors.JOSEError.code
+  )
+}
+
+/**
+ * Wraps a key getter so a key service outage becomes a 503 instead of a 401:
+ * clients must not sign users out because Supabase is unreachable.
+ */
+function guardKeyFetch(getKey: JWTVerifyGetKey): JWTVerifyGetKey {
+  return async (header, token) => {
+    try {
+      return await getKey(header, token)
+    } catch (err) {
+      throw isKeyFetchFailure(err) ? authUnavailable() : err
+    }
+  }
+}
 
 export function createVerifier(auth: AuthConfig, keys?: JWTVerifyGetKey): VerifyToken {
   const common = { issuer: auth.issuer, audience: auth.audience, clockTolerance: 60, requiredClaims: ['exp', 'sub'] }
@@ -31,15 +61,21 @@ export function createVerifier(auth: AuthConfig, keys?: JWTVerifyGetKey): Verify
     }
   }
 
+  if (!secretKey && !resolveKey) {
+    throw new Error('createVerifier: no key source (set jwtSecret, jwksUrl or localKeyFile, or inject keys)')
+  }
+  const getKey = resolveKey ? guardKeyFetch(resolveKey) : undefined
+
   return async (token) => {
     let sub: unknown
     try {
       const options = { ...common, algorithms }
       const result = secretKey
         ? await jwtVerify(token, secretKey, options)
-        : await jwtVerify(token, resolveKey as JWTVerifyGetKey, options)
+        : await jwtVerify(token, getKey as JWTVerifyGetKey, options)
       sub = result.payload.sub
-    } catch {
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 503) throw err
       throw new UnauthorizedError()
     }
     if (typeof sub !== 'string' || !UUID.test(sub)) throw new UnauthorizedError()

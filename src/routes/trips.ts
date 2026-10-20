@@ -113,6 +113,9 @@ const errors = {
   unprocessable: errorResponse('Body is valid JSON but violates the schema.'),
   preconditionRequired: errorResponse('If-Match header is required.'),
   internal: errorResponse('Unexpected server error.'),
+  serviceUnavailable: errorResponse(
+    'The token could not be checked because the auth key service is unreachable. Retry later; do not sign the user out.',
+  ),
 }
 
 const common = { tags: ['Trips'], security: [{ bearerAuth: [] }] }
@@ -132,6 +135,7 @@ const listTrips = createRoute({
     400: errors.badRequest,
     401: errors.unauthorized,
     500: errors.internal,
+    503: errors.serviceUnavailable,
   },
 })
 
@@ -155,6 +159,7 @@ const createTrip = createRoute({
     415: errors.unsupportedMediaType,
     422: errors.unprocessable,
     500: errors.internal,
+    503: errors.serviceUnavailable,
   },
 })
 
@@ -170,6 +175,7 @@ const getTrip = createRoute({
     401: errors.unauthorized,
     404: errors.notFound,
     500: errors.internal,
+    503: errors.serviceUnavailable,
   },
 })
 
@@ -198,6 +204,7 @@ const replaceTrip = createRoute({
     422: errors.unprocessable,
     428: errors.preconditionRequired,
     500: errors.internal,
+    503: errors.serviceUnavailable,
   },
 })
 
@@ -223,6 +230,7 @@ const renameTrip = createRoute({
     415: errors.unsupportedMediaType,
     422: errors.unprocessable,
     500: errors.internal,
+    503: errors.serviceUnavailable,
   },
 })
 
@@ -238,6 +246,7 @@ const deleteTrip = createRoute({
     401: errors.unauthorized,
     404: errors.notFound,
     500: errors.internal,
+    503: errors.serviceUnavailable,
   },
 })
 
