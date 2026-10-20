@@ -5,7 +5,7 @@ import type { VerifyToken } from './auth/verifier.js'
 import { errorHandler, notFound, payloadTooLarge } from './errors.js'
 import { validationHook } from './http/validation.js'
 import type { TripRepo } from './repo/trips.js'
-import type { RemoteConfigSource } from './routes/config.js'
+import { configRoute, type RemoteConfigSource } from './routes/config.js'
 import { registerTripRoutes } from './routes/trips.js'
 
 export type Deps = { repo: TripRepo; verify: VerifyToken; remoteConfig: RemoteConfigSource }
@@ -39,6 +39,8 @@ export function createApp(deps: Deps): OpenAPIHono<{ Variables: AuthVariables }>
     }),
   )
 
+  // Public: bearerAuth above only covers /v1/trips/*.
+  app.route('/v1', configRoute(deps.remoteConfig))
   registerTripRoutes(app, deps.repo)
 
   return app
