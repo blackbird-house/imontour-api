@@ -1,5 +1,6 @@
 import type { Context } from 'hono'
 import { HTTPException } from 'hono/http-exception'
+import postgres from 'postgres'
 import { ZodError } from 'zod'
 
 export class ApiError extends Error {
@@ -39,6 +40,14 @@ const HTTP_EXCEPTION_CODES: Record<number, string> = {
   415: 'unsupported_media_type',
 }
 
+/**
+ * Postgres rejected a value as malformed input: 22021 invalid byte sequence
+ * (e.g. NUL in text), 22P05 untranslatable character (e.g. unpaired surrogate
+ * in jsonb), 22P02 invalid text representation (e.g. a bad uuid). Schemas
+ * should catch these first; this is the backstop that keeps them out of 500.
+ */
+const INVALID_INPUT_CODES = new Set(['22021', '22P05', '22P02'])
+
 export function errorHandler(err: Error, c: Context): Response {
   if (err instanceof ApiError) {
     return c.json({ error: { code: err.code, message: err.message }, ...err.extra }, err.status as 400)
@@ -52,6 +61,9 @@ export function errorHandler(err: Error, c: Context): Response {
     const issue = err.issues[0]
     const path = issue && issue.path.length > 0 ? issue.path.join('.') : 'body'
     return c.json({ error: { code: 'unprocessable', message: `${path}: ${issue?.message ?? 'invalid'}` } }, 422)
+  }
+  if (err instanceof postgres.PostgresError && INVALID_INPUT_CODES.has(err.code)) {
+    return c.json({ error: { code: 'unprocessable', message: 'body: contains a value the database cannot store' } }, 422)
   }
   console.error(err)
   return c.json({ error: { code: 'internal', message: 'Internal server error' } }, 500)

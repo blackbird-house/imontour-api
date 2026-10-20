@@ -269,6 +269,42 @@ describe('POST /v1/trips', () => {
   })
 })
 
+describe('text Postgres cannot store', () => {
+  it.each([
+    ['a NUL in name', { name: 'a\u0000b' }, /^name/],
+    ['a lone surrogate in name', { name: 'a\ud800b' }, /^name/],
+    ['a NUL in rawInput', { destinations: [destination({ rawInput: 'a\u0000b' })] }, /^destinations\.0\.rawInput/],
+    ['a lone surrogate in rawInput', { destinations: [destination({ rawInput: '\ud800' })] }, /^destinations\.0\.rawInput/],
+  ])('POST with %s is 422 naming the path, never a server error', async (_label, json, path) => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const res = await t.request('/v1/trips', { method: 'POST', as: USER_A, json })
+      const b = await expectError(res, 422, 'unprocessable')
+      expect((b.error as Json).message).toMatch(path)
+      expect(spy).not.toHaveBeenCalled()
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('PATCH with a NUL in name is 422', async () => {
+    const created = await createTrip(USER_A)
+    const res = await t.request(`/v1/trips/${created.id as string}`, {
+      method: 'PATCH',
+      as: USER_A,
+      json: { name: 'x\u0000' },
+    })
+    const b = await expectError(res, 422, 'unprocessable')
+    expect((b.error as Json).message).toMatch(/^name/)
+  })
+
+  it('keeps a well-formed surrogate pair (emoji) unchanged', async () => {
+    const trip = await createTrip(USER_A, { name: 'Trip \u{1F5FE}', destinations: [destination({ rawInput: '\u{1F30F}' })] })
+    expect(trip.name).toBe('Trip \u{1F5FE}')
+    expect((trip.destinations as Json[])[0]!.rawInput).toBe('\u{1F30F}')
+  })
+})
+
 describe('unknown enum-like values', () => {
   it('round-trip unchanged through POST, GET and PUT', async () => {
     const destinations = [unknownValuesDestination(), destination()]

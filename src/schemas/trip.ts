@@ -9,6 +9,16 @@ function isRealDay(value: string): boolean {
   return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d
 }
 
+/** A UTF-16 surrogate without its pair (with the `u` flag a valid pair is one non-surrogate code point). */
+const LONE_SURROGATE = /\p{Cs}/u
+
+/**
+ * Any string Postgres can store: no NUL (rejected by text and jsonb) and no
+ * unpaired surrogate (rejected by jsonb, silently replaced in text). Used for
+ * every client-supplied string so such input is a 422, never a 500.
+ */
+export const text = z.string().refine((s) => !s.includes('\u0000') && !LONE_SURROGATE.test(s), 'Contains a NUL or unpaired surrogate')
+
 /** yyyy-MM-dd calendar day with no time or zone. */
 export const dayString = z
   .string()
@@ -18,21 +28,21 @@ export const dayString = z
 
 export const placeSchema = z
   .object({
-    displayName: z.string().openapi({ example: 'Tokyo' }),
-    type: z.string().min(1).openapi({
+    displayName: text.openapi({ example: 'Tokyo' }),
+    type: text.min(1).openapi({
       description: 'Known values: city, country, region. Any non-empty string is accepted.',
       example: 'city',
     }),
     latitude: z.number().min(-90).max(90).openapi({ example: 35.68 }),
     longitude: z.number().min(-180).max(180).openapi({ example: 139.69 }),
-    geocodeSourceID: z.string().nullish(),
-    countryCode: z.string().nullish().openapi({ example: 'JP' }),
+    geocodeSourceID: text.nullish(),
+    countryCode: text.nullish().openapi({ example: 'JP' }),
   })
   .openapi('Place')
 
 export const timingSchema = z
   .object({
-    mode: z.string().min(1).openapi({
+    mode: text.min(1).openapi({
       description: 'Known values: explicitDates, durationOnly, fuzzyMonth. Any non-empty string is accepted.',
       example: 'explicitDates',
     }),
@@ -48,8 +58,8 @@ export const timingSchema = z
 export const destinationSchema = z
   .object({
     id: z.uuid(),
-    rawInput: z.string(),
-    color: z.string().min(1).openapi({
+    rawInput: text,
+    color: text.min(1).openapi({
       description: 'Palette color name. Known values: coral, amber, lime, teal, sky, indigo, violet, rose. Any non-empty string is accepted.',
       example: 'coral',
     }),
@@ -58,7 +68,7 @@ export const destinationSchema = z
   })
   .openapi('Destination')
 
-const nameField = z.string().nullish().openapi({ description: 'Trip name. May be empty or null.' })
+const nameField = text.nullish().openapi({ description: 'Trip name. May be empty or null.' })
 
 export const tripInputSchema = z
   .object({
@@ -104,7 +114,7 @@ export const tripListSchema = z
   .openapi('TripList')
 
 export const renameSchema = z
-  .object({ name: z.string().nullable() })
+  .object({ name: text.nullable() })
   .openapi('Rename')
 
 export const errorSchema = z
