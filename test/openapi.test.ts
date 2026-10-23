@@ -120,6 +120,14 @@ describe('OpenAPI document', () => {
     expect(post.responses['409']).toBeDefined()
   })
 
+  it('documents PATCH as an unconditional rename: no If-Match parameter, no 412', () => {
+    const patch = doc.paths['/v1/trips/{id}'].patch as Json
+    const headerParams = ((patch.parameters ?? []) as Json[]).filter((p) => p.in === 'header')
+    expect(headerParams).toEqual([])
+    expect(patch.responses['412']).toBeUndefined()
+    expect(patch.description).toMatch(/last write wins/i)
+  })
+
   it('documents the ETag on every trip-returning response', () => {
     const ok = [
       doc.paths['/v1/trips/{id}'].get.responses['200'],

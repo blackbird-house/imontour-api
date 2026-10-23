@@ -77,7 +77,7 @@ curl -s -X PUT $BASE/v1/trips/$ID \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -H 'If-Match: "1"' \
   -d '{"schemaVersion":1,"name":"Japan v2","destinations":[]}'
 
-# Rename (If-Match optional)
+# Rename (unconditional: no If-Match)
 curl -s -X PATCH $BASE/v1/trips/$ID \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"name":"Renamed"}'
@@ -322,7 +322,7 @@ Notes for client generation:
 
 - **Revisions:** every trip has an integer `revision`, returned as a quoted `ETag` (`"3"`) on GET, POST, PUT and PATCH. Behind a CDN that compresses responses (Vercel does) the ETag arrives **weak**, `W/"3"`. Send it back in `If-Match` exactly as received: the API accepts both forms. The trip body's `revision` field is the same number.
 - **PUT** replaces the whole document and requires `If-Match`: missing is **428**, stale is **412** with `currentRevision` in the body. `id`, `revision` and `updatedAt` in the body are ignored.
-- **PATCH** only renames. `If-Match` is optional; when sent, a stale value is 412.
+- **PATCH** only renames, **unconditionally** (last write wins), and bumps the revision. `If-Match` is not part of the contract and is not in `openapi.json`: behind Vercel, a `PATCH` that carries `If-Match` can be answered with a platform 412 *after* the rename was applied. The server itself still honours a stale `If-Match` with 412 when called directly. For a change that must not overwrite a newer revision, use `PUT` with `If-Match`.
 - **Not yours is not found:** another user's trip, or an id that is not a UUID, returns 404.
 - **The profile has no revision**: `/v1/me` sends no `ETag` and ignores `If-Match` (last write wins).
 - **Errors** share one shape: `{"error":{"code":"...","message":"..."}}`. A 412 adds a top-level `currentRevision`.

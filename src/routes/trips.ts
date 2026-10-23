@@ -61,13 +61,6 @@ const ifMatchRequired = z.object({
     }),
 })
 
-const ifMatchOptional = z.object({
-  'If-Match': z
-    .string()
-    .optional()
-    .openapi({ description: 'Optional revision guard: `"3"` or `3`. Stale is 412.', example: '"3"' }),
-})
-
 const preconditionFailedSchema = errorSchema
   .extend({ currentRevision: z.number().int().min(1) })
   .openapi('PreconditionFailedError')
@@ -214,10 +207,11 @@ const renameTrip = createRoute({
   method: 'patch',
   path: '/v1/trips/{id}',
   summary: 'Rename a trip',
-  description: 'Changes only the name. `If-Match` is optional here; when sent, a stale revision yields 412.',
+  description:
+    'Changes only the name, unconditionally (last write wins), and bumps the revision. ' +
+    'Use `PUT` with `If-Match` for a change that must not overwrite a newer revision.',
   request: {
     params: idParams,
-    headers: ifMatchOptional,
     body: jsonBody(renameSchema, 'The new name (string or null).'),
   },
   responses: {
@@ -225,7 +219,6 @@ const renameTrip = createRoute({
     400: errors.badRequest,
     401: errors.unauthorized,
     404: errors.notFound,
-    412: errors.preconditionFailed,
     413: errors.payloadTooLarge,
     415: errors.unsupportedMediaType,
     422: errors.unprocessable,
@@ -311,6 +304,7 @@ export function registerTripRoutes(app: TripsApp, repo: TripRepo): void {
   app.openapi(renameTrip, async (c) => {
     const { id } = c.req.valid('param')
     const { name } = c.req.valid('json')
+    // Not part of the documented contract (see renameTrip), but still honoured if a client sends it.
     const revision = expectedRevision(c.req.header('If-Match'), false)
     const trip = unwrap(await repo.rename(c.get('userId'), id, name, revision))
     return c.json(trip, 200, { ETag: formatEtag(trip.revision) })
