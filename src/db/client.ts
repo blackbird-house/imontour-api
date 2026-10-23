@@ -1,6 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import postgres from 'postgres'
+import { isLocalHost } from '../env.js'
 
 export type Db = ReturnType<typeof postgres>
 
@@ -17,8 +18,26 @@ const MIGRATIONS_DIR = fileURLToPath(new URL('../../db/migrations/', import.meta
  * transaction poolers (Supabase pooler / pgbouncer). Never rely on search_path:
  * always qualify tables with the `db(schema)` identifier.
  */
+/**
+ * Hosted databases (Supabase and the like) refuse unencrypted connections, so every non-local host gets
+ * SSL. `require` encrypts without verifying the certificate chain. Local databases (Docker, tests) stay
+ * plain, and an explicit `sslmode=` / `ssl=` in the URL always wins.
+ */
+function sslOptions(databaseUrl: string): { ssl?: 'require' } {
+  let url: URL
+  try {
+    url = new URL(databaseUrl)
+  } catch {
+    return {}
+  }
+  if (url.searchParams.has('sslmode') || url.searchParams.has('ssl')) return {}
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  return isLocalHost(host) ? {} : { ssl: 'require' }
+}
+
 export function createDb(databaseUrl: string, opts: { max?: number } = {}): Db {
   return postgres(databaseUrl, {
+    ...sslOptions(databaseUrl),
     prepare: false,
     max: opts.max ?? 5,
     idle_timeout: 20,
