@@ -54,9 +54,12 @@ export async function createTestSchema(
     db,
     schema,
     async drop() {
-      await db.unsafe(`drop schema if exists "${schema}" cascade`)
-      await db.end({ timeout: 5 })
-      opened.delete(db)
+      try {
+        await db.unsafe(`drop schema if exists "${schema}" cascade`)
+      } finally {
+        await db.end({ timeout: 5 })
+        opened.delete(db)
+      }
     },
   }
 }

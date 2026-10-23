@@ -61,9 +61,13 @@ export function createVerifier(auth: AuthConfig, keys?: JWTVerifyGetKey): Verify
     const file = auth.localKeyFile
     let local: Promise<JWTVerifyGetKey> | undefined
     resolveKey = async (header, token) => {
-      local ??= readLocalKeyFile(file).then(({ kid, publicJwk }) =>
-        createLocalJWKSet({ keys: [{ ...publicJwk, kid, alg: 'ES256', use: 'sig' }] }),
-      )
+      local ??= readLocalKeyFile(file)
+        .then(({ kid, publicJwk }) => createLocalJWKSet({ keys: [{ ...publicJwk, kid, alg: 'ES256', use: 'sig' }] }))
+        .catch((err: unknown) => {
+          // Do not cache a failed key-file read; retry on the next request.
+          local = undefined
+          throw err
+        })
       return (await local)(header, token)
     }
   }

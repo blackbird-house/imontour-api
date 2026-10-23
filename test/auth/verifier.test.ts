@@ -1,6 +1,10 @@
 import { describe, expect, it, beforeAll } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { Hono } from 'hono'
 import { errors as joseErrors, type JWTVerifyGetKey } from 'jose'
+import { ensureLocalKeyFile, signLocalToken } from '../../src/auth/localKeys.js'
 import { createVerifier } from '../../src/auth/verifier.js'
 import { bearerAuth, type AuthVariables } from '../../src/auth/middleware.js'
 import { ApiError, errorHandler, UnauthorizedError } from '../../src/errors.js'
@@ -190,6 +194,27 @@ describe('createVerifier (key service failures)', () => {
 
   it('keeps no matching key a 401', async () => {
     expect(await failure(throwing(new joseErrors.JWKSNoMatchingKey()))).toBeInstanceOf(UnauthorizedError)
+  })
+})
+
+describe('createVerifier (local key file)', () => {
+  it('does not cache a failed key-file read: it recovers once the file exists', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'verifier-keys-'))
+    try {
+      const keyFile = join(dir, 'keys.json')
+      const verifyLocal = createVerifier({ issuer: TEST_ISSUER, audience: TEST_AUDIENCE, localKeyFile: keyFile })
+
+      // No file yet: a well-formed token reaches key lookup, which fails as a 503 (not a 401).
+      const probe = await signToken(kp)
+      await expect(verifyLocal(probe)).rejects.toMatchObject({ status: 503 })
+
+      await ensureLocalKeyFile(keyFile)
+      const token = await signLocalToken(keyFile, { sub: TEST_USER_ID, iss: TEST_ISSUER, aud: TEST_AUDIENCE })
+      const identity = await verifyLocal(token)
+      expect(identity.subject).toBe(TEST_USER_ID)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })
 

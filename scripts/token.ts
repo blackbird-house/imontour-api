@@ -1,7 +1,7 @@
 import { ensureLocalKeyFile, signLocalToken } from '../src/auth/localKeys.js'
+import { UUID_RE } from '../src/uuid.js'
 
 const DEV_SUB = '00000000-0000-4000-8000-000000000001'
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function fail(message: string): never {
   console.error(message)
@@ -16,7 +16,7 @@ const aud = env.AUTH_AUDIENCE?.trim() || 'authenticated'
 const keyFile = env.AUTH_LOCAL_KEY_FILE?.trim()
 if (!keyFile) fail('AUTH_LOCAL_KEY_FILE is required')
 const sub = process.argv[2] ?? DEV_SUB
-if (!UUID.test(sub)) fail('sub must be a UUID')
+if (!UUID_RE.test(sub)) fail('sub must be a UUID')
 
 await ensureLocalKeyFile(keyFile)
 console.log(await signLocalToken(keyFile, { sub, iss, aud }))

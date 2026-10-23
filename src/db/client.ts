@@ -44,13 +44,17 @@ export async function runMigrations(db: Db, schema: string, vars: MigrationVars 
   assertSchemaName(schema)
   const quoted = `"${schema}"`
 
-  await db.unsafe(`create schema if not exists ${quoted}`)
-  await db.unsafe(
-    `create table if not exists ${quoted}.schema_migrations (
-       filename   text primary key,
-       applied_at timestamptz not null default now()
-     )`,
-  )
+  // Under the same lock as the migrations, so two first-time runners cannot race on `create ... if not exists`.
+  await db.begin(async (tx) => {
+    await tx`select pg_advisory_xact_lock(hashtext(${schema}))`
+    await tx.unsafe(`create schema if not exists ${quoted}`)
+    await tx.unsafe(
+      `create table if not exists ${quoted}.schema_migrations (
+         filename   text primary key,
+         applied_at timestamptz not null default now()
+       )`,
+    )
+  })
 
   const files = (await readdir(MIGRATIONS_DIR)).filter((f) => f.endsWith('.sql')).sort()
   const applied: string[] = []

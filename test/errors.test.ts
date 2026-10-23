@@ -3,7 +3,7 @@ import postgres from 'postgres'
 import { describe, expect, it, vi } from 'vitest'
 import { HTTPException } from 'hono/http-exception'
 import { ZodRealError } from 'zod'
-import { errorHandler } from '../src/errors.js'
+import { ApiError, errorHandler, preconditionFailed } from '../src/errors.js'
 
 function appThrowing(err: Error) {
   const app = new Hono()
@@ -62,6 +62,19 @@ describe('errorHandler', () => {
     })
     expect(await (await appThrowing(nested).request('/')).json()).toEqual({
       error: { code: 'unprocessable', message: 'destinations.0.color: too long' },
+    })
+  })
+
+  it('puts extra fields next to error and never lets them replace it', async () => {
+    const res = await appThrowing(preconditionFailed({ currentRevision: 3 })).request('/')
+    expect(await res.json()).toEqual({
+      error: { code: 'precondition_failed', message: 'Precondition failed' },
+      currentRevision: 3,
+    })
+
+    const clash = new ApiError(409, 'conflict', 'real message', { error: 'spoofed' })
+    expect(await (await appThrowing(clash).request('/')).json()).toEqual({
+      error: { code: 'conflict', message: 'real message' },
     })
   })
 })

@@ -51,7 +51,7 @@ describe('buildDeps', () => {
     expect(calls).toEqual(['https://ref.supabase.co/auth/v1/admin/users/abc'])
   })
 
-  it('does no I/O at build time when it creates the db from the URL itself', async () => {
+  it('creates its own db from the URL without connecting at build time', async () => {
     // postgres.js connects lazily, so creating the db from the URL must not connect either.
     const deps = buildDeps(config)
     expect(deps.repo).toBeDefined()

@@ -50,11 +50,11 @@ function toTrip(row: TripRow): Trip {
 }
 
 export function createTripRepo(db: Db, schema: string): TripRepo {
-  const trips = db(schema)
+  const schemaId = db(schema)
 
   async function currentRevision(userId: string, id: string): Promise<number | null> {
     const rows = await db<{ revision: number }[]>`
-      select revision from ${trips}.trips where user_id = ${userId} and id = ${id}`
+      select revision from ${schemaId}.trips where user_id = ${userId} and id = ${id}`
     return rows[0]?.revision ?? null
   }
 
@@ -68,7 +68,7 @@ export function createTripRepo(db: Db, schema: string): TripRepo {
       const keyset = cursor ? db`and (updated_at, id) < (${new Date(cursor.updatedAt)}, ${cursor.id})` : db``
       const rows = await db<SummaryRow[]>`
         select id, name, destinations, updated_at
-        from ${trips}.trips
+        from ${schemaId}.trips
         where user_id = ${userId} ${keyset}
         order by updated_at desc, id desc
         limit ${limit + 1}`
@@ -89,7 +89,7 @@ export function createTripRepo(db: Db, schema: string): TripRepo {
     async get(userId, id) {
       const rows = await db<TripRow[]>`
         select id, name, schema_version, revision, destinations, updated_at
-        from ${trips}.trips where user_id = ${userId} and id = ${id}`
+        from ${schemaId}.trips where user_id = ${userId} and id = ${id}`
       return rows[0] ? toTrip(rows[0]) : null
     },
 
@@ -100,7 +100,7 @@ export function createTripRepo(db: Db, schema: string): TripRepo {
         // `as never` (here and in replace): postgres.js types db.json() too narrowly for
         // our typed objects; a typing gap in the library, the value is plain JSON.
         const rows = await db<TripRow[]>`
-          insert into ${trips}.trips
+          insert into ${schemaId}.trips
             (user_id, id, name, schema_version, revision, destinations, created_at, updated_at)
           values
             (${userId}, ${id}, ${input.name ?? null}, ${input.schemaVersion}, 1,
@@ -116,7 +116,7 @@ export function createTripRepo(db: Db, schema: string): TripRepo {
     async replace(userId, id, expectedRevision, input) {
       // `as never`: see create().
       const rows = await db<TripRow[]>`
-        update ${trips}.trips
+        update ${schemaId}.trips
         set name = ${input.name ?? null},
             schema_version = ${input.schemaVersion},
             destinations = ${db.json(input.destinations as never)},
@@ -131,7 +131,7 @@ export function createTripRepo(db: Db, schema: string): TripRepo {
     async rename(userId, id, name, expectedRevision) {
       const guard = expectedRevision === undefined ? db`` : db`and revision = ${expectedRevision}`
       const rows = await db<TripRow[]>`
-        update ${trips}.trips
+        update ${schemaId}.trips
         set name = ${name},
             revision = revision + 1,
             updated_at = ${new Date()}
@@ -142,7 +142,7 @@ export function createTripRepo(db: Db, schema: string): TripRepo {
     },
 
     async remove(userId, id) {
-      const rows = await db`delete from ${trips}.trips where user_id = ${userId} and id = ${id} returning id`
+      const rows = await db`delete from ${schemaId}.trips where user_id = ${userId} and id = ${id} returning id`
       return rows.length > 0
     },
   }
