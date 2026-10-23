@@ -5,6 +5,7 @@ import { createTestSchema, insertUser, stopTestDatabase } from '../helpers/db.js
 import { TEST_ISSUER } from '../helpers/tokens.js'
 
 const ISSUER = 'https://issuer.test/auth/v1'
+const MIGRATIONS = ['001_trips.sql', '002_users.sql', '003_enable_rls.sql']
 
 describe('runMigrations', () => {
   let ctx: Awaited<ReturnType<typeof createTestSchema>>
@@ -19,8 +20,19 @@ describe('runMigrations', () => {
   })
 
   it('applies every migration once and is idempotent', async () => {
-    expect(await runMigrations(ctx.db, ctx.schema, { authIssuer: ISSUER })).toEqual(['001_trips.sql', '002_users.sql'])
+    expect(await runMigrations(ctx.db, ctx.schema, { authIssuer: ISSUER })).toEqual(MIGRATIONS)
     expect(await runMigrations(ctx.db, ctx.schema, { authIssuer: ISSUER })).toEqual([])
+  })
+
+  it('enables row level security (no policies) on every table', async () => {
+    const rows = await ctx.db<{ relname: string; rls: boolean }[]>`
+      select c.relname, c.relrowsecurity as rls
+      from pg_class c join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = ${ctx.schema} and c.relkind = 'r' order by c.relname`
+    expect(rows.map((r) => r.relname)).toEqual(['identities', 'schema_migrations', 'trips', 'users'])
+    expect(rows.every((r) => r.rls)).toBe(true)
+    const policies = await ctx.db`select 1 from pg_policies where schemaname = ${ctx.schema}`
+    expect(policies).toHaveLength(0)
   })
 
   it('creates trips with PK (user_id, id)', async () => {
@@ -66,7 +78,54 @@ describe('runMigrations concurrency', () => {
   // With TEST_DATABASE_URL (CI) the pool has two connections, so these really race; PGlite serialises them.
   it('lets concurrent first-time runners all succeed and applies each migration once', async () => {
     const runs = await Promise.all([1, 2, 3].map(() => runMigrations(ctx.db, ctx.schema, { authIssuer: ISSUER })))
-    expect(runs.flat().sort()).toEqual(['001_trips.sql', '002_users.sql'])
+    expect(runs.flat().sort()).toEqual(MIGRATIONS)
+  })
+})
+
+describe('003_enable_rls.sql grants', () => {
+  let ctx: Awaited<ReturnType<typeof createTestSchema>>
+  const created: string[] = []
+
+  beforeAll(async () => {
+    ctx = await createTestSchema({ migrate: false })
+    // Stand-ins for Supabase's API roles (they only exist there); drop again afterwards.
+    for (const role of ['anon', 'authenticated']) {
+      const [{ n }] = await ctx.db<{ n: number }[]>`select count(*)::int as n from pg_roles where rolname = ${role}`
+      if (n === 0) {
+        await ctx.db.unsafe(`create role ${role}`)
+        created.push(role)
+      }
+    }
+  })
+
+  afterAll(async () => {
+    try {
+      // Roles go first: drop() closes the connection.
+      for (const role of created) {
+        await ctx.db.unsafe(`drop owned by ${role}`)
+        await ctx.db.unsafe(`drop role ${role}`)
+      }
+      await ctx.drop()
+    } finally {
+      await stopTestDatabase()
+    }
+  })
+
+  it('revokes table access from anon and authenticated, even when granted by default privileges', async () => {
+    // Mirrors Supabase, where new tables are granted to both roles automatically.
+    await ctx.db.unsafe(`create schema "${ctx.schema}"`)
+    await ctx.db.unsafe(`grant usage on schema "${ctx.schema}" to anon, authenticated`)
+    await ctx.db.unsafe(`alter default privileges in schema "${ctx.schema}" grant all on tables to anon, authenticated`)
+
+    await runMigrations(ctx.db, ctx.schema, { authIssuer: ISSUER })
+
+    for (const role of ['anon', 'authenticated']) {
+      for (const table of ['trips', 'users', 'identities', 'schema_migrations']) {
+        const [{ ok }] = await ctx.db<{ ok: boolean }[]>`
+          select has_table_privilege(${role}, ${`"${ctx.schema}".${table}`}, 'select, insert, update, delete') as ok`
+        expect(ok, `${role} on ${table}`).toBe(false)
+      }
+    }
   })
 })
 
@@ -102,7 +161,10 @@ describe('002_users.sql', () => {
 
     // The issuer is quoted, so a quote in it cannot break out of the literal.
     const issuer = "https://issuer.test/o'brien"
-    expect(await runMigrations(ctx.db, ctx.schema, { authIssuer: issuer })).toEqual(['002_users.sql'])
+    expect(await runMigrations(ctx.db, ctx.schema, { authIssuer: issuer })).toEqual([
+      '002_users.sql',
+      '003_enable_rls.sql',
+    ])
 
     const users = await ctx.db<{ id: string }[]>`select id from ${q()}.users order by id`
     expect(users.map((u) => u.id)).toEqual([a, b].sort())
