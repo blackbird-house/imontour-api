@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createTarget, type ApiTarget } from './target.js'
 
 /**
@@ -7,6 +7,11 @@ import { createTarget, type ApiTarget } from './target.js'
  * ephemeral port; with API_BASE_URL + API_TEST_TOKEN + API_TEST_ALLOW_REMOTE=1 it tests
  * that server instead (see README "Testing"). Everything it creates is deleted again.
  */
+
+// Some tests make a dozen sequential requests (create several trips, then page through them). Against a
+// remote deployment each one costs a network round trip plus a database hop, which passes the 5 s default
+// (about 0.45 s per request when the function and database are in different regions).
+vi.setConfig({ testTimeout: 60_000 })
 
 type Json = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 
