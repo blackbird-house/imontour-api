@@ -13,6 +13,8 @@ type Json = Record<string, any> // eslint-disable-line @typescript-eslint/no-exp
 let target: ApiTarget
 const created: string[] = []
 const remote = () => target.mode === 'remote'
+// A CDN that compresses a response (Vercel does) may turn a strong ETag into a weak one: `W/"1"`.
+const opaque = (etag: string | null) => etag?.replace(/^W\//, '')
 
 beforeAll(async () => {
   target = await createTarget()
@@ -79,7 +81,7 @@ describe('GET /v1/config', () => {
     const res = await call('/v1/config', { token: null })
     expect(res.status).toBe(200)
     expect(res.headers.get('content-type')).toMatch(/application\/json/)
-    expect(res.headers.get('etag')).toMatch(/^"[^"]+"$/)
+    expect(res.headers.get('etag')).toMatch(/^(W\/)?"[^"]+"$/)
     expect(res.headers.get('cache-control')).toBe('no-cache')
     expect(await res.json()).toMatchObject({ schemaVersion: expect.any(Number) })
   })
@@ -91,7 +93,7 @@ describe('GET /v1/config', () => {
 
     const cached = await call('/v1/config', { token: null, headers: { 'If-None-Match': etag } })
     expect(cached.status).toBe(304)
-    expect(cached.headers.get('etag')).toBe(etag)
+    expect(opaque(cached.headers.get('etag'))).toBe(opaque(etag))
     expect(await cached.text()).toBe('')
 
     const stale = await call('/v1/config', { token: null, headers: { 'If-None-Match': '"stale"' } })
@@ -133,7 +135,7 @@ describe('trip lifecycle', () => {
   it('creates a trip: 201 with ETag, Location and the stored document', async () => {
     const name = unique('create')
     const { id, res, trip } = await createTrip(name)
-    expect(res.headers.get('etag')).toBe('"1"')
+    expect(opaque(res.headers.get('etag'))).toBe('"1"')
     expect(res.headers.get('location')).toBe(`/v1/trips/${id}`)
     expect(trip).toMatchObject({ id, name, revision: 1, schemaVersion: 1, destinations: [] })
     expect(trip.updatedAt).toEqual(expect.any(String))
@@ -143,7 +145,7 @@ describe('trip lifecycle', () => {
     const { id, trip } = await createTrip()
     const res = await call(`/v1/trips/${id}`)
     expect(res.status).toBe(200)
-    expect(res.headers.get('etag')).toBe('"1"')
+    expect(opaque(res.headers.get('etag'))).toBe('"1"')
     expect(await res.json()).toEqual(trip)
   })
 
@@ -229,7 +231,7 @@ describe('trip lifecycle', () => {
       json: { ...trip, name },
     })
     expect(res.status).toBe(200)
-    expect(res.headers.get('etag')).toBe('"2"')
+    expect(opaque(res.headers.get('etag'))).toBe('"2"')
     expect(await res.json()).toMatchObject({ id, name, revision: 2 })
     // The old revision is now stale.
     const again = await call(`/v1/trips/${id}`, {
@@ -245,7 +247,7 @@ describe('trip lifecycle', () => {
     const renamed = unique('renamed')
     const res = await call(`/v1/trips/${id}`, { method: 'PATCH', json: { name: renamed } })
     expect(res.status).toBe(200)
-    expect(res.headers.get('etag')).toBe('"2"')
+    expect(opaque(res.headers.get('etag'))).toBe('"2"')
     expect(await res.json()).toMatchObject({ id, name: renamed, revision: 2 })
 
     await expectError(
@@ -406,6 +408,7 @@ describe('/v1/me', () => {
 describe('unknown routes', () => {
   it('answer 404 with the error shape', async () => {
     await expectError(await call('/v1/nope', { token: null }), 404, 'not_found')
-    await expectError(await call('/nope'), 404, 'not_found')
+    // Outside /v1 a hosted platform (Vercel) answers with its own 404 page before the app is reached.
+    if (!remote()) await expectError(await call('/nope'), 404, 'not_found')
   })
 })

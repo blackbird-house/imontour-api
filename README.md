@@ -320,7 +320,7 @@ Notes for client generation:
 
 ## API behavior notes
 
-- **Revisions:** every trip has an integer `revision`, returned as a quoted `ETag` (`"3"`) on GET, POST, PUT and PATCH.
+- **Revisions:** every trip has an integer `revision`, returned as a quoted `ETag` (`"3"`) on GET, POST, PUT and PATCH. Behind a CDN that compresses responses (Vercel does) the ETag arrives **weak**, `W/"3"`. Send it back in `If-Match` exactly as received: the API accepts both forms. The trip body's `revision` field is the same number.
 - **PUT** replaces the whole document and requires `If-Match`: missing is **428**, stale is **412** with `currentRevision` in the body. `id`, `revision` and `updatedAt` in the body are ignored.
 - **PATCH** only renames. `If-Match` is optional; when sent, a stale value is 412.
 - **Not yours is not found:** another user's trip, or an id that is not a UUID, returns 404.
