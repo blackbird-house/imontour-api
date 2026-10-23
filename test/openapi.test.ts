@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { parse } from 'yaml'
 import { buildOpenApiDocument, formatOpenApiDocument } from '../src/openapi.js'
 
 type Json = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -195,7 +196,11 @@ describe('OpenAPI document', () => {
     for (const ref of refs) expect(resolve(ref), ref).toBeDefined()
   })
 
-  it('matches the committed openapi.json byte for byte', () => {
-    expect(readFileSync('openapi.json', 'utf8')).toBe(formatOpenApiDocument(doc))
+  it('parses back to exactly the generated document (no YAML type or anchor surprises)', () => {
+    expect(parse(readFileSync('openapi.yaml', 'utf8'))).toEqual(JSON.parse(JSON.stringify(doc)))
+  })
+
+  it('matches the committed openapi.yaml byte for byte', () => {
+    expect(readFileSync('openapi.yaml', 'utf8')).toBe(formatOpenApiDocument(doc))
   })
 })

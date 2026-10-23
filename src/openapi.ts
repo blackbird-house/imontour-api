@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { createApp } from './app.js'
+import { stringify } from 'yaml'
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
 
@@ -31,7 +32,10 @@ export function buildOpenApiDocument(): object {
   })
 }
 
-/** Deterministic serialization: 2-space indent, trailing newline, generation key order. */
+/**
+ * Deterministic YAML serialization: 2-space indent, no line folding, no anchors or aliases
+ * (shared objects are written out in full so every generator reads them), generation key order.
+ */
 export function formatOpenApiDocument(doc: object): string {
-  return `${JSON.stringify(doc, null, 2)}\n`
+  return stringify(doc, { indent: 2, lineWidth: 0, aliasDuplicateObjects: false })
 }
