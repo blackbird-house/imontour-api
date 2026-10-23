@@ -479,7 +479,24 @@ describe('PUT /v1/trips/{id}', () => {
     await expectError(res, 428, 'precondition_required')
   })
 
-  it.each(['abc', 'W/"1"', '*', '"1", "2"', '0'])('rejects If-Match %j with 400', async (ifMatch) => {
+  it('treats a weak If-Match (what a compressing CDN hands clients) like the strong one', async () => {
+    const created = await createTrip(USER_A)
+    const id = created.id as string
+    const put = (ifMatch: string) =>
+      t.request(`/v1/trips/${id}`, {
+        method: 'PUT',
+        as: USER_A,
+        headers: { 'If-Match': ifMatch },
+        json: { destinations: [] },
+      })
+
+    const ok = await put('W/"1"')
+    expect(ok.status).toBe(200)
+    expect(ok.headers.get('etag')).toBe('"2"')
+    await expectError(await put('W/"1"'), 412, 'precondition_failed')
+  })
+
+  it.each(['abc', '*', '"1", "2"', '0'])('rejects If-Match %j with 400', async (ifMatch) => {
     const created = await createTrip(USER_A)
     const res = await t.request(`/v1/trips/${created.id as string}`, {
       method: 'PUT',
