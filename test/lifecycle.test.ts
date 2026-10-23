@@ -7,6 +7,11 @@ import { loadConfig, type Config } from '../src/env.js'
 import { createShutdown, startServer } from '../src/lifecycle.js'
 import { createTestSchema, stopTestDatabase } from './helpers/db.js'
 
+// The first test starts an in-process Postgres, writes a key file, runs migrations and opens a real socket.
+// That takes ~1.5 s idle but can pass the 5 s default on a loaded machine, and a timeout there also breaks the
+// tests after it (ECONNRESET), so give this file generous room. Real hangs still fail, just later.
+vi.setConfig({ testTimeout: 30_000 })
+
 afterAll(stopTestDatabase)
 
 let dir: string
