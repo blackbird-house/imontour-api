@@ -363,6 +363,7 @@ paths:
       operationId: getConfig
       tags:
         - Config
+      security: []
       summary: Remote config (public)
       description: No authentication. Clients revalidate with `If-None-Match`.
       parameters:

@@ -121,6 +121,16 @@ describe('OpenAPI document', () => {
     expect(post.responses['409']).toBeDefined()
   })
 
+  it('marks GET /v1/config as explicitly public (security: []) and everything else as bearer-protected', () => {
+    expect(doc.paths['/v1/config'].get.security).toEqual([])
+    for (const [path, ops] of Object.entries(doc.paths as Json)) {
+      if (path === '/v1/config') continue
+      for (const method of METHODS) {
+        if (ops[method]) expect(ops[method].security, `${method} ${path}`).toEqual([{ bearerAuth: [] }])
+      }
+    }
+  })
+
   it('documents PATCH as an unconditional rename: no If-Match parameter, no 412', () => {
     const patch = doc.paths['/v1/trips/{id}'].patch as Json
     const headerParams = ((patch.parameters ?? []) as Json[]).filter((p) => p.in === 'header')
