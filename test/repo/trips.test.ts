@@ -208,7 +208,7 @@ describe('trip repository', () => {
         pages++
         seen.push(...page.items.map((i) => i.id))
         if (page.nextCursor === null) {
-          expect(page.items.length).toBeLessThanOrEqual(2)
+          expect(page.items).toHaveLength(1) // 5 trips at limit 2: pages of 2, 2, 1
           break
         }
         expect(page.items).toHaveLength(2)

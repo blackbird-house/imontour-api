@@ -1,6 +1,6 @@
-export type Cursor = { updatedAt: string; id: string }
+import { UUID_RE } from '../uuid.js'
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+export type Cursor = { updatedAt: string; id: string }
 
 export function encodeCursor(c: Cursor): string {
   return Buffer.from(JSON.stringify({ u: c.updatedAt, i: c.id }), 'utf8').toString('base64url')
@@ -23,7 +23,7 @@ export function decodeCursor(s: string): Cursor | null {
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
     const { u, i } = parsed as Record<string, unknown>
     if (typeof u !== 'string' || typeof i !== 'string') return null
-    if (!isCanonicalInstant(u) || !UUID.test(i)) return null
+    if (!isCanonicalInstant(u) || !UUID_RE.test(i)) return null
     return { updatedAt: u, id: i }
   } catch {
     return null

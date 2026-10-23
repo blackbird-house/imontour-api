@@ -338,6 +338,7 @@ src/
   server.ts           local Node server (runs migrations when APP_ENV=local)
   app.ts              builds the Hono app from dependencies
   deps.ts, env.ts     wiring and environment validation
+  errors.ts, uuid.ts  API error type and handler, shared UUID pattern
   routes/, schemas/   HTTP routes and Zod schemas
   repo/, db/          Postgres repositories (trips, users) and client
   auth/, http/        token verification, user resolver, provider admin port + adapters, ETag and cursor helpers

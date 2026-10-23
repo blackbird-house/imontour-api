@@ -49,7 +49,8 @@ const INVALID_INPUT_CODES = new Set(['22021', '22P05', '22P02'])
 
 export function errorHandler(err: Error, c: Context): Response {
   if (err instanceof ApiError) {
-    return c.json({ error: { code: err.code, message: err.message }, ...err.extra }, err.status as 400)
+    // `extra` goes first so it can never replace the standard `error` object.
+    return c.json({ ...err.extra, error: { code: err.code, message: err.message } }, err.status as 400)
   }
   if (err instanceof HTTPException) {
     // Raised by Hono itself, e.g. malformed JSON (400) or an unsupported media type (415).

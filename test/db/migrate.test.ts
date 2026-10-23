@@ -51,6 +51,25 @@ describe('runMigrations', () => {
   })
 })
 
+describe('runMigrations concurrency', () => {
+  let ctx: Awaited<ReturnType<typeof createTestSchema>>
+
+  beforeAll(async () => {
+    ctx = await createTestSchema({ migrate: false })
+  })
+
+  afterAll(async () => {
+    await ctx.drop()
+    await stopTestDatabase()
+  })
+
+  // With TEST_DATABASE_URL (CI) the pool has two connections, so these really race; PGlite serialises them.
+  it('lets concurrent first-time runners all succeed and applies each migration once', async () => {
+    const runs = await Promise.all([1, 2, 3].map(() => runMigrations(ctx.db, ctx.schema, { authIssuer: ISSUER })))
+    expect(runs.flat().sort()).toEqual(['001_trips.sql', '002_users.sql'])
+  })
+})
+
 describe('002_users.sql', () => {
   let ctx: Awaited<ReturnType<typeof createTestSchema>>
   const q = () => ctx.db(ctx.schema)

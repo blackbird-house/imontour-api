@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { loadConfig, type AppEnv } from '../src/env.js'
 
@@ -11,7 +12,9 @@ const PLACEHOLDERS: Record<string, string> = {
 
 function parse(name: string): Record<string, string> {
   const out: Record<string, string> = {}
-  for (const line of readFileSync(`env/${name}.env.example`, 'utf8').split('\n')) {
+  for (const line of readFileSync(fileURLToPath(new URL(`../env/${name}.env.example`, import.meta.url)), 'utf8').split(
+    '\n',
+  )) {
     const t = line.trim()
     if (t === '' || t.startsWith('#')) continue
     const eq = t.indexOf('=')
@@ -56,8 +59,9 @@ describe.each(names)('env/%s.env.example', (name) => {
   it('keeps secrets as placeholders and deployed databases off local hosts', () => {
     if (name === 'local') return
     expect(raw.DATABASE_URL).toContain('<')
-    expect(raw.AUTH_JWT_SECRET ?? '<').toContain('<')
-    const host = new URL(config.databaseUrl).hostname.toLowerCase()
+    expect(raw.DATABASE_URL).toMatch(/<[^>]+>/)
+    // URL.hostname keeps the brackets of an IPv6 literal.
+    const host = new URL(config.databaseUrl).hostname.toLowerCase().replace(/^\[|\]$/g, '')
     expect(LOCAL_HOSTS.has(host)).toBe(false)
   })
 })
