@@ -24,6 +24,26 @@ describe('createSupabaseIdentityAdmin', () => {
     expect(calls[0]!.init.headers).toEqual({ apikey: 'service-key', Authorization: 'Bearer service-key' })
   })
 
+  it('sends a new sb_secret_ key as apikey only, never as a bearer token', async () => {
+    const { calls, fetchFn } = fakeFetch(200)
+    const key = 'sb_secret_abc123'
+    await createSupabaseIdentityAdmin({ ...config, serviceKey: key }, fetchFn).deleteIdentity({
+      issuer: ISSUER,
+      subject: 'abc-123',
+    })
+    expect(calls[0]!.init.headers).toEqual({ apikey: key })
+  })
+
+  it('keeps sending a legacy JWT service_role key as apikey and bearer', async () => {
+    const { calls, fetchFn } = fakeFetch(200)
+    const key = 'eyJhbGciOiJIUzI1NiJ9.e30.sig'
+    await createSupabaseIdentityAdmin({ ...config, serviceKey: key }, fetchFn).deleteIdentity({
+      issuer: ISSUER,
+      subject: 'abc-123',
+    })
+    expect(calls[0]!.init.headers).toEqual({ apikey: key, Authorization: `Bearer ${key}` })
+  })
+
   it('encodes the subject into the path', async () => {
     const { calls, fetchFn } = fakeFetch(200)
     await createSupabaseIdentityAdmin(config, fetchFn).deleteIdentity({ issuer: ISSUER, subject: 'a/b?c' })
