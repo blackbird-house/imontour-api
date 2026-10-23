@@ -107,6 +107,7 @@ describe('GET /v1/config', () => {
     const doc = appFor(file).getOpenAPI31Document({ openapi: '3.1.0', info: { title: 't', version: '1' } })
     const op = doc.paths?.['/v1/config']?.get
     expect(op).toBeDefined()
-    expect(op?.security).toBeUndefined()
+    // An empty list, not a missing key: explicitly public, so no default security applies.
+    expect(op?.security).toEqual([])
   })
 })

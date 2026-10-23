@@ -53,6 +53,8 @@ const getConfig = createRoute({
   method: 'get',
   path: '/config',
   tags: ['Config'],
+  // Explicitly public: an empty list overrides any default security, and tells generators and linters it is intentional.
+  security: [],
   summary: 'Remote config (public)',
   description: 'No authentication. Clients revalidate with `If-None-Match`.',
   request: {

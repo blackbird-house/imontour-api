@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { parse } from 'yaml'
 import { buildOpenApiDocument, formatOpenApiDocument } from '../src/openapi.js'
 
 type Json = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -120,6 +121,16 @@ describe('OpenAPI document', () => {
     expect(post.responses['409']).toBeDefined()
   })
 
+  it('marks GET /v1/config as explicitly public (security: []) and everything else as bearer-protected', () => {
+    expect(doc.paths['/v1/config'].get.security).toEqual([])
+    for (const [path, ops] of Object.entries(doc.paths as Json)) {
+      if (path === '/v1/config') continue
+      for (const method of METHODS) {
+        if (ops[method]) expect(ops[method].security, `${method} ${path}`).toEqual([{ bearerAuth: [] }])
+      }
+    }
+  })
+
   it('documents PATCH as an unconditional rename: no If-Match parameter, no 412', () => {
     const patch = doc.paths['/v1/trips/{id}'].patch as Json
     const headerParams = ((patch.parameters ?? []) as Json[]).filter((p) => p.in === 'header')
@@ -195,7 +206,11 @@ describe('OpenAPI document', () => {
     for (const ref of refs) expect(resolve(ref), ref).toBeDefined()
   })
 
-  it('matches the committed openapi.json byte for byte', () => {
-    expect(readFileSync('openapi.json', 'utf8')).toBe(formatOpenApiDocument(doc))
+  it('parses back to exactly the generated document (no YAML type or anchor surprises)', () => {
+    expect(parse(readFileSync('openapi.yaml', 'utf8'))).toEqual(JSON.parse(JSON.stringify(doc)))
+  })
+
+  it('matches the committed openapi.yaml byte for byte', () => {
+    expect(readFileSync('openapi.yaml', 'utf8')).toBe(formatOpenApiDocument(doc))
   })
 })

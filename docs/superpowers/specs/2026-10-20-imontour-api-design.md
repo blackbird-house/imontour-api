@@ -122,7 +122,7 @@ One table `trips`: primary key `(user_id, id)`, `name text null`, `schema_versio
 - Serverless: use Supabase's pooled connection string; no long-lived connection assumptions.
 - Tests ship with the code. A README documents setup and run commands and every env var.
 - Git hygiene: feature branch, small commits, open a PR against `blackbird-house/imontour-api`, **do not merge it**.
-- OpenAPI spec is generated from the same Zod schemas that validate requests, committed as `openapi.json` (or `.yaml`), with a check that it is up to date.
+- OpenAPI spec is generated from the same Zod schemas that validate requests, committed as `openapi.yaml` (first generated as `openapi.json`, switched to YAML on 2026-10-23), with a check that it is up to date.
 
 ## Left to the builder
 
@@ -161,7 +161,7 @@ Added after a builder review. Everything here is **Claude's call** (not a decisi
 - `ETag` is the revision as a quoted string (`"3"`). `If-Match` accepts the quoted form and a bare integer. Missing `If-Match` on PUT is `428`.
 
 **PATCH**
-- Returns the full trip, bumps `revision` and `updatedAt`. The documented contract is an unconditional rename (no `If-Match`): behind Vercel a `PATCH` carrying `If-Match` gets a platform 412 after the rename was applied (found on the first real deploy), so it was removed from `openapi.json`. The server still honours a stale `If-Match` when called directly. A rename therefore makes a concurrent in-flight PUT based on the old revision return `412`, and the client reloads. This is intended.
+- Returns the full trip, bumps `revision` and `updatedAt`. The documented contract is an unconditional rename (no `If-Match`): behind Vercel a `PATCH` carrying `If-Match` gets a platform 412 after the rename was applied (found on the first real deploy), so it was removed from `openapi.yaml`. The server still honours a stale `If-Match` when called directly. A rename therefore makes a concurrent in-flight PUT based on the old revision return `412`, and the client reloads. This is intended.
 
 **GET /v1/config**
 - A static JSON file in the repo, with permissive defaults: no minimum or recommended version and an empty `flags` object. `ETag` is a hash of the content; supports `If-None-Match` → `304`. Contents are owned by the user and edited by changing the file (or pointing `CONFIG_FILE` at another).
