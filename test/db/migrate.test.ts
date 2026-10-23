@@ -216,6 +216,32 @@ describe('002_users.sql constraints', () => {
   })
 })
 
+describe('createDb ssl', () => {
+  const sslOf = async (url: string) => {
+    const db = createDb(url)
+    try {
+      return db.options.ssl
+    } finally {
+      await db.end({ timeout: 0 })
+    }
+  }
+
+  it('requires SSL for hosted databases', async () => {
+    expect(await sslOf('postgres://u:p@aws-0-eu-west-1.pooler.supabase.com:6543/postgres')).toBeTruthy()
+  })
+
+  it.each(['postgres://u:p@localhost:5432/app', 'postgres://u:p@127.0.0.1:5432/app', 'postgres://u:p@[::1]:5432/app'])(
+    'stays plain for local %s',
+    async (url) => {
+      expect(await sslOf(url)).toBeFalsy()
+    },
+  )
+
+  it('leaves an explicit sslmode in the URL alone', async () => {
+    expect(await sslOf('postgres://u:p@db.example.com:5432/app?sslmode=disable')).toBeFalsy()
+  })
+})
+
 describe('createDb', () => {
   it('sets a 10 s connect timeout and keeps prepare off, without connecting', async () => {
     const db = createDb('postgres://u:p@db.invalid:5432/app')
