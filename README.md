@@ -127,7 +127,7 @@ Dev shares the staging project's database but is isolated in its own schema. Mig
 | `AUTH_JWT_SECRET` | exactly one of this and `AUTH_JWKS_URL` | dev, staging, prod | Legacy HS256 shared secret. Secret | none |
 | `AUTH_LOCAL_KEY_FILE` | local only | local | Local ES256 key pair file, created on first start | `.local/jwks.json` in the template |
 | `AUTH_ADMIN_URL` | no, with `AUTH_ADMIN_SERVICE_KEY` | dev, staging, prod | Supabase project URL, used to delete the auth user on `DELETE /v1/me`. Without it the provider account is left in place | none |
-| `AUTH_ADMIN_SERVICE_KEY` | no, with `AUTH_ADMIN_URL` | dev, staging, prod | Supabase service-role key for the call above. Secret, full admin rights | none |
+| `AUTH_ADMIN_SERVICE_KEY` | no, with `AUTH_ADMIN_URL` | dev, staging, prod | Supabase secret key for the call above: a new `sb_secret_...` API key (sent as `apikey` only) or the legacy `service_role` JWT (also sent as bearer). Secret, full admin rights | none |
 | `CONFIG_FILE` | no | all | Remote config document served at `GET /v1/config` | `config/remote-config.json` |
 
 Safety guards, enforced at startup (a violation throws a `ConfigError` naming the variable):
