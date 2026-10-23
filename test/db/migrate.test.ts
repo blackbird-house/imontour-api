@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDb, runMigrations } from '../../src/db/client.js'
-import { createTestSchema, stopTestDatabase } from '../helpers/db.js'
+import { createTestSchema, insertUser, stopTestDatabase } from '../helpers/db.js'
+import { TEST_ISSUER } from '../helpers/tokens.js'
 
 const ISSUER = 'https://issuer.test/auth/v1'
 
@@ -92,23 +93,46 @@ describe('002_users.sql', () => {
     expect(identities).toEqual([a, b].sort().map((id) => ({ issuer, subject: id, user_id: id })))
   })
 
-  it('adds the trips -> users foreign key with cascade', async () => {
-    const orphan = ctx.db`
-      insert into ${q()}.trips (user_id, id, schema_version, revision, destinations, created_at, updated_at)
-      values (${randomUUID()}, ${randomUUID()}, 1, 1, '[]'::jsonb, now(), now())`
-    await expect(orphan).rejects.toMatchObject({ code: '23503' })
+})
 
-    const [{ id }] = await ctx.db<{ id: string }[]>`select id from ${q()}.users limit 1`
+// Each test below builds its own rows on a freshly migrated schema, so none
+// depends on what an earlier test left behind or on row order.
+describe('002_users.sql constraints', () => {
+  let ctx: Awaited<ReturnType<typeof createTestSchema>>
+  const q = () => ctx.db(ctx.schema)
+
+  beforeAll(async () => {
+    ctx = await createTestSchema()
+  })
+
+  afterAll(async () => {
+    await ctx.drop()
+    await stopTestDatabase()
+  })
+
+  const insertTrip = (user: string) => ctx.db`
+    insert into ${q()}.trips (user_id, id, schema_version, revision, destinations, created_at, updated_at)
+    values (${user}, ${randomUUID()}, 1, 1, '[]'::jsonb, now(), now())`
+
+  it('adds the trips -> users foreign key with cascade', async () => {
+    await expect(insertTrip(randomUUID())).rejects.toMatchObject({ code: '23503' })
+
+    const id = await insertUser(ctx.db, ctx.schema)
+    await ctx.db`insert into ${q()}.identities (issuer, subject, user_id) values (${TEST_ISSUER}, ${randomUUID()}, ${id})`
+    await insertTrip(id)
+
     await ctx.db`delete from ${q()}.users where id = ${id}`
-    const left = await ctx.db`select 1 from ${q()}.trips where user_id = ${id}`
-    expect(left).toHaveLength(0)
-    const ids = await ctx.db`select 1 from ${q()}.identities where user_id = ${id}`
-    expect(ids).toHaveLength(0)
+    expect(await ctx.db`select 1 from ${q()}.trips where user_id = ${id}`).toHaveLength(0)
+    expect(await ctx.db`select 1 from ${q()}.identities where user_id = ${id}`).toHaveLength(0)
   })
 
   it('keys identities by (issuer, subject)', async () => {
-    const [{ id }] = await ctx.db<{ id: string }[]>`select id from ${q()}.users limit 1`
-    const dup = ctx.db`insert into ${q()}.identities (issuer, subject, user_id) select issuer, subject, ${id} from ${q()}.identities limit 1`
+    const first = await insertUser(ctx.db, ctx.schema)
+    const second = await insertUser(ctx.db, ctx.schema)
+    const subject = randomUUID()
+    await ctx.db`insert into ${q()}.identities (issuer, subject, user_id) values (${TEST_ISSUER}, ${subject}, ${first})`
+
+    const dup = ctx.db`insert into ${q()}.identities (issuer, subject, user_id) values (${TEST_ISSUER}, ${subject}, ${second})`
     await expect(dup).rejects.toMatchObject({ code: '23505' })
   })
 })
