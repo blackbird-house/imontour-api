@@ -1089,7 +1089,7 @@
         ],
         "operationId": "renameTrip",
         "summary": "Rename a trip",
-        "description": "Changes only the name. `If-Match` is optional here; when sent, a stale revision yields 412.",
+        "description": "Changes only the name, unconditionally (last write wins), and bumps the revision. Use `PUT` with `If-Match` for a change that must not overwrite a newer revision.",
         "parameters": [
           {
             "schema": {
@@ -1102,17 +1102,6 @@
             "description": "Trip id. A value that is not a UUID is treated as a missing trip (404).",
             "name": "id",
             "in": "path"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "description": "Optional revision guard: `\"3\"` or `3`. Stale is 412.",
-              "example": "\"3\""
-            },
-            "required": false,
-            "description": "Optional revision guard: `\"3\"` or `3`. Stale is 412.",
-            "name": "If-Match",
-            "in": "header"
           }
         ],
         "requestBody": {
@@ -1174,16 +1163,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "412": {
-            "description": "If-Match does not match the current revision.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PreconditionFailedError"
                 }
               }
             }

@@ -161,7 +161,7 @@ Added after a builder review. Everything here is **Claude's call** (not a decisi
 - `ETag` is the revision as a quoted string (`"3"`). `If-Match` accepts the quoted form and a bare integer. Missing `If-Match` on PUT is `428`.
 
 **PATCH**
-- Returns the full trip, bumps `revision` and `updatedAt`. It accepts an optional `If-Match`; without it the rename always applies. A rename therefore makes a concurrent in-flight PUT based on the old revision return `412`, and the client reloads. This is intended.
+- Returns the full trip, bumps `revision` and `updatedAt`. The documented contract is an unconditional rename (no `If-Match`): behind Vercel a `PATCH` carrying `If-Match` gets a platform 412 after the rename was applied (found on the first real deploy), so it was removed from `openapi.json`. The server still honours a stale `If-Match` when called directly. A rename therefore makes a concurrent in-flight PUT based on the old revision return `412`, and the client reloads. This is intended.
 
 **GET /v1/config**
 - A static JSON file in the repo, with permissive defaults: no minimum or recommended version and an empty `flags` object. `ETag` is a hash of the content; supports `If-None-Match` → `304`. Contents are owned by the user and edited by changing the file (or pointing `CONFIG_FILE` at another).
