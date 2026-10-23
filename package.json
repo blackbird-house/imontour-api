@@ -18,6 +18,8 @@
     "token": "node --env-file-if-exists=.env --import tsx scripts/token.ts",
     "openapi": "tsx scripts/generate-openapi.ts",
     "openapi:check": "tsx scripts/generate-openapi.ts --check",
+    "collection": "tsx scripts/generate-collection.ts",
+    "collection:check": "tsx scripts/generate-collection.ts --check",
     "migrate": "tsx scripts/migrate.ts",
     "local": "npm run db:up && npm run dev",
     "format": "prettier --write .",

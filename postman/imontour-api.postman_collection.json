@@ -1,0 +1,422 @@
+{
+  "info": {
+    "_postman_id": "5b0c8e2a-4d6f-4a31-9c7e-2f1a0b9d8c71",
+    "name": "Imontour API",
+    "description": "Generated from openapi.yaml by `npm run collection`; do not edit by hand (CI fails if it is out of date).\n\nSetup: import this collection and one environment, then set the `token` variable (kept empty in the repo).\n- Local server: run `npm run token` and paste the output.\n- Deployed API: sign in a test user and use the access token (see \"API client\" in the README).\n\n`tripId` and `etag` are filled in by the requests themselves in Postman; in other clients copy them by hand\nfrom the previous response (`id` and the `ETag` header).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "tripId",
+      "value": ""
+    },
+    {
+      "key": "etag",
+      "value": "\"1\""
+    }
+  ],
+  "item": [
+    {
+      "name": "Config",
+      "item": [
+        {
+          "name": "Remote config (public)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "If-None-Match",
+                "value": "",
+                "description": "Send the ETag from a previous response to get 304 when nothing changed.",
+                "disabled": true
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/config",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "config"
+              ]
+            },
+            "description": "Remote config (public)\n\nNo authentication. Clients revalidate with `If-None-Match`.",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Trips",
+      "item": [
+        {
+          "name": "List trip summaries, newest first",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/trips?limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "trips"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Page size, 1-100."
+                },
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "description": "nextCursor from the previous page.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List trip summaries, newest first"
+          }
+        },
+        {
+          "name": "Create a trip (empty or full)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/trips",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "trips"
+              ]
+            },
+            "description": "Create a trip (empty or full)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schemaVersion\": 1,\n  \"name\": \"Japan and Portugal\",\n  \"destinations\": [\n    {\n      \"id\": \"3f1c2b8e-6a47-4d0e-9f5b-1c2d3e4f5a61\",\n      \"rawInput\": \"tokyo 5 days\",\n      \"color\": \"coral\",\n      \"place\": {\n        \"displayName\": \"Tokyo\",\n        \"type\": \"city\",\n        \"latitude\": 35.68,\n        \"longitude\": 139.69,\n        \"countryCode\": \"JP\"\n      },\n      \"timing\": {\n        \"mode\": \"explicitDates\",\n        \"startDay\": \"2027-04-01\",\n        \"endDay\": \"2027-04-05\",\n        \"durationDays\": 5,\n        \"isPlaceholder\": false\n      }\n    },\n    {\n      \"id\": \"7a9d4c10-2b3e-4f65-8a71-9b0c1d2e3f42\",\n      \"rawInput\": \"lisbon 4 days\",\n      \"color\": \"teal\",\n      \"place\": {\n        \"displayName\": \"Lisbon\",\n        \"type\": \"city\",\n        \"latitude\": 38.72,\n        \"longitude\": -9.14,\n        \"countryCode\": \"PT\"\n      },\n      \"timing\": {\n        \"mode\": \"durationOnly\",\n        \"durationDays\": 4,\n        \"isPlaceholder\": false\n      }\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Postman only: keeps {{tripId}} and {{etag}} up to date for the next request. Other clients ignore this.",
+                  "if (pm.response.code < 300) {",
+                  "  const trip = pm.response.json();",
+                  "  pm.collectionVariables.set('tripId', trip.id);",
+                  "  pm.collectionVariables.set('etag', pm.response.headers.get('ETag'));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get a trip",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/trips/{{tripId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "trips",
+                "{{tripId}}"
+              ]
+            },
+            "description": "Get a trip"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Postman only: keeps {{tripId}} and {{etag}} up to date for the next request. Other clients ignore this.",
+                  "if (pm.response.code < 300) {",
+                  "  const trip = pm.response.json();",
+                  "  pm.collectionVariables.set('tripId', trip.id);",
+                  "  pm.collectionVariables.set('etag', pm.response.headers.get('ETag'));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Replace a trip (revision-checked)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "If-Match",
+                "value": "{{etag}}",
+                "description": "Required. The ETag of the revision you are replacing (a stale one gets 412)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/trips/{{tripId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "trips",
+                "{{tripId}}"
+              ]
+            },
+            "description": "Replace a trip (revision-checked)\n\nReplaces the whole trip document. The `If-Match` header is required; a missing one yields 428. A stale revision yields 412 with `currentRevision`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schemaVersion\": 1,\n  \"name\": \"Japan and Portugal (revised)\",\n  \"destinations\": [\n    {\n      \"id\": \"3f1c2b8e-6a47-4d0e-9f5b-1c2d3e4f5a61\",\n      \"rawInput\": \"tokyo 5 days\",\n      \"color\": \"coral\",\n      \"place\": {\n        \"displayName\": \"Tokyo\",\n        \"type\": \"city\",\n        \"latitude\": 35.68,\n        \"longitude\": 139.69,\n        \"countryCode\": \"JP\"\n      },\n      \"timing\": {\n        \"mode\": \"explicitDates\",\n        \"startDay\": \"2027-04-01\",\n        \"endDay\": \"2027-04-05\",\n        \"durationDays\": 5,\n        \"isPlaceholder\": false\n      }\n    },\n    {\n      \"id\": \"7a9d4c10-2b3e-4f65-8a71-9b0c1d2e3f42\",\n      \"rawInput\": \"lisbon 4 days\",\n      \"color\": \"teal\",\n      \"place\": {\n        \"displayName\": \"Lisbon\",\n        \"type\": \"city\",\n        \"latitude\": 38.72,\n        \"longitude\": -9.14,\n        \"countryCode\": \"PT\"\n      },\n      \"timing\": {\n        \"mode\": \"fuzzyMonth\",\n        \"targetYear\": 2027,\n        \"targetMonth\": 5,\n        \"isPlaceholder\": false\n      }\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Postman only: keeps {{tripId}} and {{etag}} up to date for the next request. Other clients ignore this.",
+                  "if (pm.response.code < 300) {",
+                  "  const trip = pm.response.json();",
+                  "  pm.collectionVariables.set('tripId', trip.id);",
+                  "  pm.collectionVariables.set('etag', pm.response.headers.get('ETag'));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rename a trip",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/trips/{{tripId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "trips",
+                "{{tripId}}"
+              ]
+            },
+            "description": "Rename a trip\n\nChanges only the name, unconditionally (last write wins), and bumps the revision. Use `PUT` with `If-Match` for a change that must not overwrite a newer revision.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Japan and Portugal, renamed\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Postman only: keeps {{tripId}} and {{etag}} up to date for the next request. Other clients ignore this.",
+                  "if (pm.response.code < 300) {",
+                  "  const trip = pm.response.json();",
+                  "  pm.collectionVariables.set('tripId', trip.id);",
+                  "  pm.collectionVariables.set('etag', pm.response.headers.get('ETag'));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete a trip",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/trips/{{tripId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "trips",
+                "{{tripId}}"
+              ]
+            },
+            "description": "Delete a trip"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Me",
+      "item": [
+        {
+          "name": "Get the signed-in user profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "me"
+              ]
+            },
+            "description": "Get the signed-in user profile\n\nThe user is created on the first authenticated request, so this never answers 404 for a fresh sign-in."
+          }
+        },
+        {
+          "name": "Update the profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "me"
+              ]
+            },
+            "description": "Update the profile\n\nChanges `displayName` and/or `locale`. Absent fields are unchanged; `null` clears a field.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Test User\",\n  \"locale\": \"en-GB\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Delete the account",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "me"
+              ]
+            },
+            "description": "Delete the account\n\nPermanently deletes the user and all their trips, then asks the identity provider to delete the sign-in account. Provider cleanup is best effort: a failure is logged and does not fail the request. Not undoable."
+          }
+        }
+      ]
+    }
+  ]
+}
