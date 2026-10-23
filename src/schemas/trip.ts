@@ -17,7 +17,9 @@ const LONE_SURROGATE = /\p{Cs}/u
  * unpaired surrogate (rejected by jsonb, silently replaced in text). Used for
  * every client-supplied string so such input is a 422, never a 500.
  */
-export const text = z.string().refine((s) => !s.includes('\u0000') && !LONE_SURROGATE.test(s), 'Contains a NUL or unpaired surrogate')
+export const text = z
+  .string()
+  .refine((s) => !s.includes('\u0000') && !LONE_SURROGATE.test(s), 'Contains a NUL or unpaired surrogate')
 
 /** yyyy-MM-dd calendar day with no time or zone. */
 export const dayString = z
@@ -60,7 +62,8 @@ export const destinationSchema = z
     id: z.uuid(),
     rawInput: text,
     color: text.min(1).openapi({
-      description: 'Palette color name. Known values: coral, amber, lime, teal, sky, indigo, violet, rose. Any non-empty string is accepted.',
+      description:
+        'Palette color name. Known values: coral, amber, lime, teal, sky, indigo, violet, rose. Any non-empty string is accepted.',
       example: 'coral',
     }),
     place: placeSchema,
@@ -127,13 +130,9 @@ export const tripListSchema = z
   })
   .openapi('TripList')
 
-export const renameSchema = z
-  .object({ name: text.nullable() })
-  .openapi('Rename')
+export const renameSchema = z.object({ name: text.nullable() }).openapi('Rename')
 
-export const errorSchema = z
-  .object({ error: z.object({ code: z.string(), message: z.string() }) })
-  .openapi('Error')
+export const errorSchema = z.object({ error: z.object({ code: z.string(), message: z.string() }) }).openapi('Error')
 
 export type Trip = z.infer<typeof tripSchema>
 export type TripInput = z.infer<typeof tripInputSchema>

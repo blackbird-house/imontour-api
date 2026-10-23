@@ -248,6 +248,7 @@ npm run test:coverage  # vitest with v8 coverage of src/ (text table + HTML repo
 npm run lint        # eslint
 npm run build       # tsc --noEmit (type-check only)
 npm run format      # prettier --write . (config in .prettierrc.json; docs and README are ignored)
+npm run format:check # prettier --check . (what CI runs; fails if any file is unformatted)
 ```
 
 By default `npm test` runs against an **in-process PGlite database**, so no Docker is needed. Set `TEST_DATABASE_URL` to run against real Postgres instead; CI does:

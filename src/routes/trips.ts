@@ -1,12 +1,6 @@
 import { createRoute, z, type OpenAPIHono } from '@hono/zod-openapi'
 import type { AuthVariables } from '../auth/middleware.js'
-import {
-  badRequest,
-  conflict,
-  notFound,
-  preconditionFailed,
-  preconditionRequired,
-} from '../errors.js'
+import { badRequest, conflict, notFound, preconditionFailed, preconditionRequired } from '../errors.js'
 import { decodeCursor, encodeCursor } from '../http/cursor.js'
 import { formatEtag, parseIfMatch } from '../http/etag.js'
 import { DuplicateTripError, type TripRepo, type WriteResult } from '../repo/trips.js'
@@ -43,7 +37,11 @@ const listQuery = z.object({
     .min(1)
     .max(MAX_LIMIT)
     .default(DEFAULT_LIMIT)
-    .openapi({ param: { name: 'limit', in: 'query' }, description: `Page size, 1-${MAX_LIMIT}.`, example: DEFAULT_LIMIT }),
+    .openapi({
+      param: { name: 'limit', in: 'query' },
+      description: `Page size, 1-${MAX_LIMIT}.`,
+      example: DEFAULT_LIMIT,
+    }),
   cursor: z
     .string()
     .optional()
@@ -79,7 +77,9 @@ const etagHeader = z.object({
 })
 
 const createdHeaders = etagHeader.extend({
-  Location: z.string().openapi({ description: 'URL of the created trip.', example: '/v1/trips/9b2f4a7c-5d1e-4f8a-8c3b-0a1b2c3d4e5f' }),
+  Location: z
+    .string()
+    .openapi({ description: 'URL of the created trip.', example: '/v1/trips/9b2f4a7c-5d1e-4f8a-8c3b-0a1b2c3d4e5f' }),
 })
 
 const jsonBody = <T extends z.ZodType>(schema: T, description: string) => ({

@@ -21,6 +21,7 @@
     "migrate": "tsx scripts/migrate.ts",
     "local": "npm run db:up && npm run dev",
     "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "db:browse": "tsx scripts/db-browse.ts",
     "db:browse:stop": "docker compose --profile tools stop adminer"
   },

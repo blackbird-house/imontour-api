@@ -8,9 +8,7 @@ const MAX_PLACE_NAMES = 3
  * strings sort chronologically) over every destination's non-null
  * startDay/endDay respectively.
  */
-export function summarize(
-  t: Pick<Trip, 'id' | 'name' | 'updatedAt' | 'destinations'>,
-): TripSummary {
+export function summarize(t: Pick<Trip, 'id' | 'name' | 'updatedAt' | 'destinations'>): TripSummary {
   let startDay: string | null = null
   let endDay: string | null = null
   for (const d of t.destinations) {

@@ -28,8 +28,7 @@ export const notFound = () => new ApiError(404, 'not_found', 'Not found')
 export const conflict = (message: string) => new ApiError(409, 'conflict', message)
 export const preconditionFailed = (extra: Record<string, unknown> = {}) =>
   new ApiError(412, 'precondition_failed', 'Precondition failed', extra)
-export const preconditionRequired = () =>
-  new ApiError(428, 'precondition_required', 'If-Match header is required')
+export const preconditionRequired = () => new ApiError(428, 'precondition_required', 'If-Match header is required')
 export const payloadTooLarge = () => new ApiError(413, 'payload_too_large', 'Payload too large')
 export const unprocessable = (message: string) => new ApiError(422, 'unprocessable', message)
 
@@ -63,7 +62,10 @@ export function errorHandler(err: Error, c: Context): Response {
     return c.json({ error: { code: 'unprocessable', message: `${path}: ${issue?.message ?? 'invalid'}` } }, 422)
   }
   if (err instanceof postgres.PostgresError && INVALID_INPUT_CODES.has(err.code)) {
-    return c.json({ error: { code: 'unprocessable', message: 'body: contains a value the database cannot store' } }, 422)
+    return c.json(
+      { error: { code: 'unprocessable', message: 'body: contains a value the database cannot store' } },
+      422,
+    )
   }
   console.error(err)
   return c.json({ error: { code: 'internal', message: 'Internal server error' } }, 500)

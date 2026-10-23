@@ -78,7 +78,12 @@ describe('trip repository', () => {
   it('replace bumps revision to 2 and replaces content; path id wins over body id', async () => {
     const created = await repo.create(USER_A, input({ name: 'old' }))
     const newDests = [dest({ rawInput: 'new' })]
-    const res = await repo.replace(USER_A, created.id, 1, input({ id: randomUUID(), name: 'new', destinations: newDests }))
+    const res = await repo.replace(
+      USER_A,
+      created.id,
+      1,
+      input({ id: randomUUID(), name: 'new', destinations: newDests }),
+    )
     expect(res.kind).toBe('ok')
     if (res.kind !== 'ok') return
     expect(res.trip.id).toBe(created.id)
@@ -165,7 +170,10 @@ describe('trip repository', () => {
     for (const name of ['', '東京 🗼', raw]) {
       const created = await repo.create(
         USER_A,
-        input({ name, destinations: [dest({ rawInput: raw, place: { displayName: raw, type: 'city', latitude: 1, longitude: 2 } })] }),
+        input({
+          name,
+          destinations: [dest({ rawInput: raw, place: { displayName: raw, type: 'city', latitude: 1, longitude: 2 } })],
+        }),
       )
       const got = await repo.get(USER_A, created.id)
       expect(got?.name).toBe(name)

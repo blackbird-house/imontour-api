@@ -141,9 +141,7 @@ describe('createVerifier (secret mode)', () => {
   })
 
   it('rejects an expired token', async () => {
-    await expect(secretVerify(await signHs256(secret, { exp: now() - 3600 }))).rejects.toBeInstanceOf(
-      UnauthorizedError,
-    )
+    await expect(secretVerify(await signHs256(secret, { exp: now() - 3600 }))).rejects.toBeInstanceOf(UnauthorizedError)
   })
 })
 
@@ -161,7 +159,9 @@ describe('createVerifier construction', () => {
   })
 
   it('accepts injected keys without any configured source', () => {
-    expect(() => createVerifier({ issuer: TEST_ISSUER, audience: TEST_AUDIENCE }, async () => kp.publicKey)).not.toThrow()
+    expect(() =>
+      createVerifier({ issuer: TEST_ISSUER, audience: TEST_AUDIENCE }, async () => kp.publicKey),
+    ).not.toThrow()
   })
 })
 

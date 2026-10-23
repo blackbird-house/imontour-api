@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  createTripBodySchema,
-  renameSchema,
-  tripInputSchema,
-  tripSchema,
-} from '../../src/schemas/trip.js'
+import { createTripBodySchema, renameSchema, tripInputSchema, tripSchema } from '../../src/schemas/trip.js'
 
 const destId = '3f6c1d1e-8a1b-4c3e-9d2a-1b2c3d4e5f60'
 const tripId = '9b2f4a7c-5d1e-4f8a-8c3b-0a1b2c3d4e5f'
@@ -169,7 +164,9 @@ describe('other schemas', () => {
     expect(createTripBodySchema.safeParse({}).success).toBe(true)
     expect(createTripBodySchema.safeParse({ name: null }).success).toBe(true)
     expect(createTripBodySchema.parse({ id: tripId, name: 'Trip' })).toMatchObject({ id: tripId, schemaVersion: 1 })
-    expect(createTripBodySchema.safeParse({ destinations: Array.from({ length: 201 }, () => dest()) }).success).toBe(false)
+    expect(createTripBodySchema.safeParse({ destinations: Array.from({ length: 201 }, () => dest()) }).success).toBe(
+      false,
+    )
     expect(createTripBodySchema.safeParse({ schemaVersion: 2 }).success).toBe(false)
     expect(createTripBodySchema.safeParse({ destinations: null }).success).toBe(false)
   })

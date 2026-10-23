@@ -3,8 +3,7 @@ import type { ZodError } from 'zod'
 import { badRequest, notFound } from '../errors.js'
 
 export type ValidationResult = { target: keyof ValidationTargets } & (
-  | { success: true }
-  | { success: false; error: ZodError }
+  { success: true } | { success: false; error: ZodError }
 )
 
 /**

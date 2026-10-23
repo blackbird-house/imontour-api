@@ -30,7 +30,9 @@ describe('buildDeps', () => {
 
   it('wires a no-op identity admin without admin credentials', async () => {
     const deps = buildDeps(config)
-    await expect(deps.identityAdmin.deleteIdentity({ issuer: config.auth.issuer, subject: 'x' })).resolves.toBeUndefined()
+    await expect(
+      deps.identityAdmin.deleteIdentity({ issuer: config.auth.issuer, subject: 'x' }),
+    ).resolves.toBeUndefined()
   })
 
   it('wires the Supabase identity admin when admin credentials are configured', async () => {
