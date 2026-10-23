@@ -190,7 +190,8 @@ The API is configured for **one issuer** today. Multi-issuer support (`AUTH_ISSU
 1. Create the project (staging, then prod).
 2. Enable the Apple provider under Authentication > Providers.
 3. Copy the pooled (transaction pooler) connection string, port 6543, for `DATABASE_URL`.
-4. Note the issuer (`https://<project-ref>.supabase.co/auth/v1`) for `AUTH_ISSUER` and the JWKS URL (`<issuer>/.well-known/jwks.json`) for `AUTH_JWKS_URL`. Projects still on the legacy shared secret can use `AUTH_JWT_SECRET` instead.
+4. Leave the **Data API** schemas as they are and never add `dev` to its exposed schemas. The API talks to Postgres directly and never uses the Data API; migration `003_enable_rls.sql` turns on row level security (no policies) and drops the `anon`/`authenticated` grants, so the anon key shipped in the app cannot read or write any table through `/rest/v1`. The API connects as the table owner (`postgres`), which bypasses RLS; if it ever connects as another role, that role needs `BYPASSRLS` or explicit policies.
+5. Note the issuer (`https://<project-ref>.supabase.co/auth/v1`) for `AUTH_ISSUER` and the JWKS URL (`<issuer>/.well-known/jwks.json`) for `AUTH_JWKS_URL`. Projects still on the legacy shared secret can use `AUTH_JWT_SECRET` instead.
 
 ### Vercel
 
@@ -226,7 +227,8 @@ The Vercel wiring (rewrite, function entrypoint, bundled files) is covered by lo
 3. `config/remote-config.json` is bundled (`includeFiles` in `vercel.json`). If `/v1/config` returns 500, check how `CONFIG_FILE` resolves in the function.
 4. A missing or invalid environment variable shows up as a cold-start failure or 500 in the Vercel function logs, with a `ConfigError` message naming the variable.
 5. Source files are not served: `curl -i https://<preview>/package.json` and `curl -i https://<preview>/src/app.ts` must both return 404, not the file.
-6. `hono/vercel` is deprecated in Hono 4.13 and moves to `@hono/vercel` in Hono v5. Plan the swap when upgrading.
+6. The Data API is locked: `curl -s -i https://<project-ref>.supabase.co/rest/v1/trips -H "apikey: <anon-key>" -H "Authorization: Bearer <anon-key>"` must **not** return trip rows (expect 401/403/404 or `[]` with no data, never rows). Run it against `trips`, `users` and `identities` on staging and prod after migrating.
+7. `hono/vercel` is deprecated in Hono 4.13 and moves to `@hono/vercel` in Hono v5. Plan the swap when upgrading.
 
 ## Before release: upgrade Vercel and Supabase to Pro
 
@@ -289,7 +291,7 @@ Most tests call `app.fetch` in-process. `test/api` talks to a base URL over **re
 | `test/repo` | Postgres trip and user repositories (CRUD, revisions, pagination, per-user isolation, delete cascade) |
 | `test/routes` | HTTP routes: trips, `/v1/me`, config, body limit |
 | `test/auth` | Token verification, user resolver (provisioning, concurrency), provider admin adapters, local key handling |
-| `test/db` | Migrations, including the `002_users.sql` backfill |
+| `test/db` | Migrations, including the `002_users.sql` backfill and the `003_enable_rls.sql` RLS and grants |
 | `test/env.test.ts`, `test/env.examples.test.ts` | Config loading, safety guards, `env/*.example` drift |
 | `test/deps.test.ts`, `test/e2e.local.test.ts` | Dependency wiring and a full local lifecycle |
 | `test/api` | Black-box contract suite over real HTTP (local ephemeral server, or an opt-in remote one) |

@@ -143,7 +143,7 @@ Added after a builder review. Everything here is **Claude's call** (not a decisi
 - Tests sign tokens with a locally generated key pair and serve a local JWKS, so they exercise the real verification path.
 
 **RLS**
-- Not a v1 deliverable. The API connects with a privileged role that bypasses RLS, so RLS would add nothing and would complicate tests. Isolation is enforced in code: every query filters on `user_id`, and a test proves user A cannot read, change or delete user B's trip. RLS can be added later if clients ever query the database directly.
+- **Superseded by migration `003_enable_rls.sql`** (RLS on, no policies, `anon`/`authenticated` grants revoked) because on Supabase the `public` schema is reachable through the Data API with the public anon key. The API itself is unaffected (it connects as the table owner). Original note: not a v1 deliverable. The API connects with a privileged role that bypasses RLS, so RLS would add nothing and would complicate tests. Isolation is enforced in code: every query filters on `user_id`, and a test proves user A cannot read, change or delete user B's trip. RLS can be added later if clients ever query the database directly.
 
 **POST /v1/trips**
 - The POST body is one schema (`CreateTripBody`): a trip input whose `destinations` is optional. An absent `destinations` is `[]`, so `{name?}`, `{}` and no body create an empty trip. A client `id` is kept whenever it is sent (also without `destinations`), and `schemaVersion` is validated in every case. When present, `destinations` must be an array (possibly empty).
