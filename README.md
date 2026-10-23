@@ -358,4 +358,19 @@ openapi.yaml          generated API description
 
 ## Git workflow
 
-Work on feature branches and open pull requests; do not merge without review. CI (`.github/workflows/ci.yml`) runs lint, type-check, tests against Postgres 16, and the OpenAPI check on every pull request and on pushes to `main`.
+Three long-lived branches, promoted in one direction:
+
+| Branch | Holds | Receives |
+|---|---|---|
+| `develop` | integrated work, always the base for new work | feature pull requests |
+| `staging` | what is being prepared for release | pull requests from `develop` |
+| `main` | released code only, every release is tagged `vX.Y.Z` | pull requests from `staging` |
+
+1. **Start every piece of work from `develop`:** `git switch develop && git pull && git switch -c <type>/<short-name>`. Never branch from `main` or `staging`.
+2. **Open the pull request into `develop`.** Do not merge without review.
+3. **Promote:** open a pull request from `develop` into `staging` when you want to test the combined work there.
+4. **Release:** when `staging` is ready, open a pull request from `staging` into `main`, merge it, then tag that `main` commit (`git tag vX.Y.Z && git push origin vX.Y.Z`) and publish the release.
+
+Use merge commits (not squash) for the promotion pull requests (`develop` into `staging`, `staging` into `main`) so the long-lived branches never diverge. Nobody pushes directly to `develop`, `staging` or `main`.
+
+CI (`.github/workflows/ci.yml`) runs lint, format check, type-check, tests against Postgres 16, and the OpenAPI check on every pull request and on pushes to `develop`, `staging` and `main`. Vercel deploys `main` to the one environment that exists today, so a merge into `main` goes live.
