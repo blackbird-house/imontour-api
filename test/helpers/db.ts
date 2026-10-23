@@ -36,9 +36,7 @@ async function startPglite(): Promise<Running> {
 
 function getRunning(): Promise<Running> {
   const external = process.env.TEST_DATABASE_URL
-  running ??= external
-    ? Promise.resolve({ url: external, stop: async () => {} })
-    : startPglite()
+  running ??= external ? Promise.resolve({ url: external, stop: async () => {} }) : startPglite()
   return running
 }
 

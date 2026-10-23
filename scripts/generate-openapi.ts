@@ -8,7 +8,9 @@ const generated = formatOpenApiDocument(buildOpenApiDocument())
 if (process.argv.includes('--check')) {
   const committed = existsSync(file) ? readFileSync(file, 'utf8') : null
   if (committed !== generated) {
-    console.error('openapi.json is out of date with the route declarations. Run `npm run openapi` and commit the result.')
+    console.error(
+      'openapi.json is out of date with the route declarations. Run `npm run openapi` and commit the result.',
+    )
     process.exit(1)
   }
   console.log('openapi.json is up to date')

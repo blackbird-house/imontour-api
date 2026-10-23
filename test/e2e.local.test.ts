@@ -90,7 +90,11 @@ describe('local end-to-end', () => {
     const profile = (await me.json()) as Json
     expect(profile).toMatchObject({ displayName: null, locale: null })
 
-    const patched = await app.request('/v1/me', { method: 'PATCH', headers, body: JSON.stringify({ displayName: 'Dev' }) })
+    const patched = await app.request('/v1/me', {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ displayName: 'Dev' }),
+    })
     expect(await patched.json()).toMatchObject({ id: profile.id, displayName: 'Dev' })
 
     expect((await app.request('/v1/me', { method: 'DELETE', headers })).status).toBe(204)

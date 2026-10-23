@@ -4,10 +4,7 @@ import { summarize } from '../domain/summary.js'
 import type { Cursor } from '../http/cursor.js'
 import type { Destination, Trip, TripInput, TripSummary } from '../schemas/trip.js'
 
-export type WriteResult =
-  | { kind: 'ok'; trip: Trip }
-  | { kind: 'stale'; currentRevision: number }
-  | { kind: 'missing' }
+export type WriteResult = { kind: 'ok'; trip: Trip } | { kind: 'stale'; currentRevision: number } | { kind: 'missing' }
 
 export interface TripRepo {
   list(
@@ -68,9 +65,7 @@ export function createTripRepo(db: Db, schema: string): TripRepo {
 
   return {
     async list(userId, { limit, cursor }) {
-      const keyset = cursor
-        ? db`and (updated_at, id) < (${new Date(cursor.updatedAt)}, ${cursor.id})`
-        : db``
+      const keyset = cursor ? db`and (updated_at, id) < (${new Date(cursor.updatedAt)}, ${cursor.id})` : db``
       const rows = await db<SummaryRow[]>`
         select id, name, destinations, updated_at
         from ${trips}.trips
@@ -87,8 +82,7 @@ export function createTripRepo(db: Db, schema: string): TripRepo {
         }),
       )
       const last = page[page.length - 1]
-      const nextCursor =
-        rows.length > limit && last ? { updatedAt: last.updated_at.toISOString(), id: last.id } : null
+      const nextCursor = rows.length > limit && last ? { updatedAt: last.updated_at.toISOString(), id: last.id } : null
       return { items, nextCursor }
     },
 

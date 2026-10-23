@@ -5,11 +5,7 @@ import type { Destination } from '../../src/schemas/trip.js'
 const tripId = '9b2f4a7c-5d1e-4f8a-8c3b-0a1b2c3d4e5f'
 const updatedAt = '2026-10-20T09:00:00Z'
 
-function dest(
-  name: string,
-  timing: Record<string, unknown> = {},
-  i = 0,
-): Destination {
+function dest(name: string, timing: Record<string, unknown> = {}, i = 0): Destination {
   return {
     id: `3f6c1d1e-8a1b-4c3e-9d2a-1b2c3d4e5f6${i}`,
     rawInput: name,

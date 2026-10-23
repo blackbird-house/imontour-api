@@ -28,11 +28,7 @@ export const authUnavailable = () => new ApiError(503, 'service_unavailable', 'A
  */
 function isKeyFetchFailure(err: unknown): boolean {
   if (!(err instanceof errors.JOSEError)) return true
-  return (
-    err instanceof errors.JWKSTimeout ||
-    err instanceof errors.JWKSInvalid ||
-    err.code === errors.JOSEError.code
-  )
+  return err instanceof errors.JWKSTimeout || err instanceof errors.JWKSInvalid || err.code === errors.JOSEError.code
 }
 
 /**

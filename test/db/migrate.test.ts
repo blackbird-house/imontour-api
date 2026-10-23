@@ -19,10 +19,7 @@ describe('runMigrations', () => {
   })
 
   it('applies every migration once and is idempotent', async () => {
-    expect(await runMigrations(ctx.db, ctx.schema, { authIssuer: ISSUER })).toEqual([
-      '001_trips.sql',
-      '002_users.sql',
-    ])
+    expect(await runMigrations(ctx.db, ctx.schema, { authIssuer: ISSUER })).toEqual(['001_trips.sql', '002_users.sql'])
     expect(await runMigrations(ctx.db, ctx.schema, { authIssuer: ISSUER })).toEqual([])
   })
 
@@ -48,7 +45,9 @@ describe('runMigrations', () => {
   })
 
   it('rejects unsafe schema names', async () => {
-    await expect(runMigrations(ctx.db, 'x"; drop schema public; --', { authIssuer: ISSUER })).rejects.toThrow(/invalid schema/i)
+    await expect(runMigrations(ctx.db, 'x"; drop schema public; --', { authIssuer: ISSUER })).rejects.toThrow(
+      /invalid schema/i,
+    )
   })
 })
 
@@ -92,7 +91,6 @@ describe('002_users.sql', () => {
       select issuer, subject, user_id from ${q()}.identities order by user_id`
     expect(identities).toEqual([a, b].sort().map((id) => ({ issuer, subject: id, user_id: id })))
   })
-
 })
 
 // Each test below builds its own rows on a freshly migrated schema, so none

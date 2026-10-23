@@ -281,7 +281,11 @@ describe('text Postgres cannot store', () => {
     ['a NUL in name', { name: 'a\u0000b' }, /^name/],
     ['a lone surrogate in name', { name: 'a\ud800b' }, /^name/],
     ['a NUL in rawInput', { destinations: [destination({ rawInput: 'a\u0000b' })] }, /^destinations\.0\.rawInput/],
-    ['a lone surrogate in rawInput', { destinations: [destination({ rawInput: '\ud800' })] }, /^destinations\.0\.rawInput/],
+    [
+      'a lone surrogate in rawInput',
+      { destinations: [destination({ rawInput: '\ud800' })] },
+      /^destinations\.0\.rawInput/,
+    ],
   ])('POST with %s is 422 naming the path, never a server error', async (_label, json, path) => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
@@ -306,7 +310,10 @@ describe('text Postgres cannot store', () => {
   })
 
   it('keeps a well-formed surrogate pair (emoji) unchanged', async () => {
-    const trip = await createTrip(USER_A, { name: 'Trip \u{1F5FE}', destinations: [destination({ rawInput: '\u{1F30F}' })] })
+    const trip = await createTrip(USER_A, {
+      name: 'Trip \u{1F5FE}',
+      destinations: [destination({ rawInput: '\u{1F30F}' })],
+    })
     expect(trip.name).toBe('Trip \u{1F5FE}')
     expect((trip.destinations as Json[])[0]!.rawInput).toBe('\u{1F30F}')
   })
@@ -561,7 +568,11 @@ describe('PUT /v1/trips/{id}', () => {
       method: 'PUT',
       as: USER_A,
       headers: { 'If-Match': '"1"' },
-      json: { destinations: [destination({ timing: { mode: 'explicitDates', startDay: '2026-02-30', isPlaceholder: false } })] },
+      json: {
+        destinations: [
+          destination({ timing: { mode: 'explicitDates', startDay: '2026-02-30', isPlaceholder: false } }),
+        ],
+      },
     })
     const b = await expectError(bad, 422, 'unprocessable')
     expect((b.error as Json).message).toContain('destinations.0.timing.startDay')
@@ -606,9 +617,19 @@ describe('PATCH /v1/trips/{id}', () => {
   it('honours a matching If-Match and rejects a stale one with 412', async () => {
     const created = await createTrip(USER_A)
     const path = `/v1/trips/${created.id as string}`
-    const ok = await t.request(path, { method: 'PATCH', as: USER_A, headers: { 'If-Match': '"1"' }, json: { name: 'a' } })
+    const ok = await t.request(path, {
+      method: 'PATCH',
+      as: USER_A,
+      headers: { 'If-Match': '"1"' },
+      json: { name: 'a' },
+    })
     expect(ok.status).toBe(200)
-    const stale = await t.request(path, { method: 'PATCH', as: USER_A, headers: { 'If-Match': '"1"' }, json: { name: 'b' } })
+    const stale = await t.request(path, {
+      method: 'PATCH',
+      as: USER_A,
+      headers: { 'If-Match': '"1"' },
+      json: { name: 'b' },
+    })
     const b = await expectError(stale, 412, 'precondition_failed')
     expect(b.currentRevision).toBe(2)
   })
@@ -674,7 +695,11 @@ describe('user isolation', () => {
       404,
       'not_found',
     )
-    await expectError(await t.request(path, { method: 'PATCH', as: USER_B, json: { name: 'hijack' } }), 404, 'not_found')
+    await expectError(
+      await t.request(path, { method: 'PATCH', as: USER_B, json: { name: 'hijack' } }),
+      404,
+      'not_found',
+    )
     await expectError(await t.request(path, { method: 'DELETE', as: USER_B }), 404, 'not_found')
 
     const still = await t.request(path, { as: USER_A })

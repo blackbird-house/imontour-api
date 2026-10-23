@@ -170,7 +170,9 @@ describe('OpenAPI document', () => {
 
   it('documents the Me schemas: User fields, and UpdateUser with both fields optional and nullable', () => {
     const { User, UpdateUser } = doc.components.schemas as Json
-    expect(User.required).toEqual(expect.arrayContaining(['id', 'displayName', 'email', 'locale', 'createdAt', 'updatedAt']))
+    expect(User.required).toEqual(
+      expect.arrayContaining(['id', 'displayName', 'email', 'locale', 'createdAt', 'updatedAt']),
+    )
     expect(UpdateUser.required ?? []).toEqual([])
     expect(Object.keys(UpdateUser.properties).sort()).toEqual(['displayName', 'locale'])
     expect(doc.paths['/v1/me'].get.responses['200'].content['application/json'].schema).toEqual({

@@ -33,9 +33,7 @@ const remoteConfigSchema = z
     schemaVersion: z.number().optional(),
     minimumSupportedVersion: z.string().optional(),
     recommendedVersion: z.string().optional(),
-    flags: z
-      .record(z.string(), z.object({ value: z.unknown(), rolloutPercent: z.number().optional() }))
-      .optional(),
+    flags: z.record(z.string(), z.object({ value: z.unknown(), rolloutPercent: z.number().optional() })).optional(),
   })
   .openapi('RemoteConfig', {
     description:
@@ -45,7 +43,9 @@ const remoteConfigSchema = z
 
 const cacheHeaders = z.object({
   ETag: z.string().openapi({ description: 'Quoted content hash of the config.', example: '"3f2a9c1d5e7b8a40"' }),
-  'Cache-Control': z.string().openapi({ description: 'Always `no-cache`: revalidate with `If-None-Match`.', example: 'no-cache' }),
+  'Cache-Control': z
+    .string()
+    .openapi({ description: 'Always `no-cache`: revalidate with `If-None-Match`.', example: 'no-cache' }),
 })
 
 const getConfig = createRoute({
@@ -67,7 +67,10 @@ const getConfig = createRoute({
       content: { 'application/json': { schema: remoteConfigSchema } },
     },
     304: { description: 'Not modified; the ETag is unchanged.', headers: cacheHeaders },
-    500: { description: 'Config file missing or unparsable.', content: { 'application/json': { schema: errorSchema } } },
+    500: {
+      description: 'Config file missing or unparsable.',
+      content: { 'application/json': { schema: errorSchema } },
+    },
   },
 })
 
