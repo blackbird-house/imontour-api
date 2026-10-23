@@ -89,6 +89,8 @@ export function createVerifier(auth: AuthConfig, keys?: JWTVerifyGetKey): Verify
       if (err instanceof ApiError && err.status === 503) throw err
       throw new UnauthorizedError()
     }
+    // Supabase anonymous sign-ins carry `is_anonymous: true`. Trips belong to real accounts, so they are refused.
+    if (payload.is_anonymous === true) throw new UnauthorizedError()
     const { sub, iss, email } = payload
     // jwtVerify already required iss to equal the configured issuer and sub to be present.
     if (typeof iss !== 'string' || typeof sub !== 'string') throw new UnauthorizedError()

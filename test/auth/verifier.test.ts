@@ -42,6 +42,13 @@ describe('createVerifier (JWKS mode)', () => {
     }
   })
 
+  it('rejects Supabase anonymous-user tokens, but not tokens that say is_anonymous is false', async () => {
+    await expect(verify(await signToken(kp, { isAnonymous: true }))).rejects.toBeInstanceOf(UnauthorizedError)
+    await expect(verify(await signToken(kp, { isAnonymous: false }))).resolves.toMatchObject({
+      subject: TEST_USER_ID,
+    })
+  })
+
   it('returns the email claim when present, and omits it otherwise', async () => {
     await expect(verify(await signToken(kp, { email: 'a@example.com' }))).resolves.toEqual({
       issuer: TEST_ISSUER,
@@ -120,6 +127,10 @@ describe('createVerifier (secret mode)', () => {
 
   it('accepts an HS256 token', async () => {
     await expect(secretVerify(await signHs256(secret))).resolves.toEqual({ issuer: TEST_ISSUER, subject: TEST_USER_ID })
+  })
+
+  it('rejects an anonymous-user HS256 token', async () => {
+    await expect(secretVerify(await signHs256(secret, { isAnonymous: true }))).rejects.toBeInstanceOf(UnauthorizedError)
   })
 
   it('rejects an HS256 token with the wrong secret', async () => {
@@ -246,6 +257,12 @@ describe('bearerAuth middleware', () => {
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ userId: `internal-${TEST_USER_ID}` })
     expect(seen.at(-1)).toEqual({ issuer: TEST_ISSUER, subject: TEST_USER_ID })
+  })
+
+  it('answers 401 and creates no user for an anonymous-user token', async () => {
+    const before = seen.length
+    await expectUnauthorized(await call({ Authorization: `Bearer ${await signToken(kp, { isAnonymous: true })}` }))
+    expect(seen).toHaveLength(before)
   })
 
   it('does not resolve a user for a rejected token', async () => {

@@ -143,6 +143,8 @@ Safety guards, enforced at startup (a violation throws a `ConfigError` naming th
 
 The iOS app signs in with Apple through Supabase Auth and sends the resulting Supabase JWT as `Authorization: Bearer <jwt>`. The API verifies the token locally (no call to Supabase) using `AUTH_JWKS_URL` or the HS256 `AUTH_JWT_SECRET`, and enforces `iss`, `aud` and `exp`.
 
+Supabase **anonymous-user tokens** (`is_anonymous: true`) are rejected with 401 on every authenticated route: trips belong to real accounts, so the app must sign in (e.g. Sign in with Apple) before calling the API.
+
 If the signing keys cannot be fetched (JWKS timeout, network error, non-200 or invalid JWKS response), authenticated routes answer **503** `service_unavailable` instead of 401, so a Supabase outage does not sign users out. Clients should retry a 503 and only treat a 401 as "signed out". A token whose key id is not in the JWKS is still 401.
 
 Locally there is no Supabase: `npm run token` signs a token with the local key file that the local server trusts.
