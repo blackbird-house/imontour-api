@@ -10,3 +10,7 @@ dist
 *.log
 coverage/
 *.tsbuildinfo
+
+supabase/.env
+supabase/.temp/
+supabase/.branches/

@@ -150,6 +150,33 @@ If the signing keys cannot be fetched (JWKS timeout, network error, non-200 or i
 
 Locally there is no Supabase: `npm run token` signs a token with the local key file that the local server trusts.
 
+### Sign in providers (Supabase config as code)
+
+The Apple and Google sign-in settings live in [`supabase/config.toml`](supabase/config.toml) and are pushed to the hosted Supabase projects with the Supabase CLI (a dev dependency). `config push` only touches properties declared in that file, so the rest of each project is left alone. The API needs no change: it only reads `iss`, `sub` and `email` from the token.
+
+Staging and prod are separate Supabase projects, so push once per project:
+
+```bash
+cp supabase/.env.example supabase/.env   # git-ignored; fill in the values for the target project
+npx supabase login                       # once
+npx supabase link --project-ref <ref>    # or pass --project-ref below
+npm run supabase:diff -- --project-ref <ref>   # preview
+npm run supabase:push -- --project-ref <ref>   # asks to confirm each change
+```
+
+Values for `supabase/.env` (secrets stay out of git):
+
+| Variable | Meaning |
+|---|---|
+| `SUPABASE_AUTH_EXTERNAL_APPLE_CLIENT_ID` | iOS bundle ID(s), comma-separated (native Sign in with Apple) |
+| `SUPABASE_AUTH_EXTERNAL_APPLE_SECRET` | Empty for native iOS only. A generated JWT (expires every 6 months) if a web client is added |
+| `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` | Google Web client ID, then the iOS client ID, comma-separated |
+| `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` | Secret of the Google Web client |
+
+One-time setup outside the repo: enable Sign in with Apple on the app's identifier in the Apple Developer account, and create the Web and iOS OAuth clients in Google Cloud (the Web client's authorized redirect URI is `https://<ref>.supabase.co/auth/v1/callback`). The iOS app then signs in with the native SDKs and calls `signInWithIdToken`. The nonce check stays on (`skip_nonce_check = false`), so the app must generate a nonce, give Google its SHA-256 hash and pass the raw value to `signInWithIdToken`; skipping the check would allow a stolen Google ID token to be replayed.
+
+Not verified against a real project yet: run `supabase:diff` first and check the output.
+
 `GET /v1/config` is public; everything under `/v1/trips` and `/v1/me` requires a token.
 
 ### Users and identities
