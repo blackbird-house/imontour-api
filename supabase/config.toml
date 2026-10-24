@@ -1,0 +1,21 @@
+# Hosted Supabase auth settings, applied with `npm run supabase:push:<staging|prod>`.
+# `supabase config push` only touches properties declared here; everything else
+# on the project is left as it is. Keep this file limited to what we manage.
+# Values come from supabase/.env (git-ignored), see supabase/.env.example.
+
+project_id = "imontour-api"
+
+[auth.external.apple]
+enabled = true
+# Comma-separated iOS bundle IDs (native sign-in). Web would need a Services ID here.
+client_id = "env(SUPABASE_AUTH_EXTERNAL_APPLE_CLIENT_ID)"
+# Empty for native iOS only; a generated JWT (expires every 6 months) if web is added.
+secret = "env(SUPABASE_AUTH_EXTERNAL_APPLE_SECRET)"
+
+[auth.external.google]
+enabled = true
+# Comma-separated: the iOS client ID and the Web client ID (the first one listed is the web one).
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+# The native Google Sign-In SDK for iOS does not send a nonce; Supabase must skip the check.
+skip_nonce_check = true
