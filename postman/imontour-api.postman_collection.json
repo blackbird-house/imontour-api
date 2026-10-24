@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "5b0c8e2a-4d6f-4a31-9c7e-2f1a0b9d8c71",
     "name": "Imontour API",
-    "description": "Generated from openapi.yaml by `npm run collection`; do not edit by hand (CI fails if it is out of date).\n\nSetup: import this collection and one environment, then set the `token` variable (kept empty in the repo).\n- Local server: run `npm run token` and paste the output.\n- Deployed API: sign in a test user and use the access token (see \"API client\" in the README).\n\n`tripId` and `etag` are filled in by the requests themselves in Postman; in other clients copy them by hand\nfrom the previous response (`id` and the `ETag` header).",
+    "description": "Generated from openapi.yaml by `npm run collection`; do not edit by hand (CI fails if it is out of date).\n\nSetup: import this collection, then set the `token` variable (kept empty in the repo). The `baseUrl` variable\ndefaults to the deployed API; the environment files (local, deployed) are optional and override both.\n- Local server: run `npm run token` and paste the output.\n- Deployed API: sign in a test user and use the access token (see \"API client\" in the README).\n\n`tripId` and `etag` are filled in by the requests themselves in Postman; in other clients copy them by hand\nfrom the previous response (`id` and the `ETag` header).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -16,6 +16,14 @@
     ]
   },
   "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://imontour-api.vercel.app"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
     {
       "key": "tripId",
       "value": ""

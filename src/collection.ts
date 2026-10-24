@@ -19,7 +19,7 @@ const METHODS = ['get', 'put', 'post', 'patch', 'delete'] as const
 
 /** Variables the requests use. `tripId` and `etag` are filled by the collection scripts (or by hand). */
 export const ENVIRONMENT_VARIABLES = ['baseUrl', 'token'] as const
-export const COLLECTION_VARIABLES = ['tripId', 'etag'] as const
+export const COLLECTION_VARIABLES = ['baseUrl', 'token', 'tripId', 'etag'] as const
 
 // Fixed ids keep the collection deterministic (and valid UUIDs, which Postman dynamic variables would not be elsewhere).
 const TOKYO_ID = '3f1c2b8e-6a47-4d0e-9f5b-1c2d3e4f5a61'
@@ -101,6 +101,7 @@ const CAPTURE_TRIP_SCRIPT = [
   '}',
 ]
 
+const DEPLOYED_BASE_URL = 'https://imontour-api.vercel.app'
 const COLLECTION_ID = '5b0c8e2a-4d6f-4a31-9c7e-2f1a0b9d8c71'
 const LOCAL_ENV_ID = '0e6d1f3b-8a2c-4b97-a5d4-7c9e1b2a3f80'
 const DEPLOYED_ENV_ID = '9a4b7c5d-1e3f-4062-b8a9-0d2c4e6f8a13'
@@ -108,7 +109,8 @@ const DEPLOYED_ENV_ID = '9a4b7c5d-1e3f-4062-b8a9-0d2c4e6f8a13'
 const DESCRIPTION = [
   'Generated from openapi.yaml by `npm run collection`; do not edit by hand (CI fails if it is out of date).',
   '',
-  'Setup: import this collection and one environment, then set the `token` variable (kept empty in the repo).',
+  'Setup: import this collection, then set the `token` variable (kept empty in the repo). The `baseUrl` variable',
+  'defaults to the deployed API; the environment files (local, deployed) are optional and override both.',
   '- Local server: run `npm run token` and paste the output.',
   '- Deployed API: sign in a test user and use the access token (see "API client" in the README).',
   '',
@@ -194,7 +196,12 @@ export function buildCollection(doc: OpenApiDocument): Json {
       schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
     },
     auth: { type: 'bearer', bearer: [{ key: 'token', value: '{{token}}', type: 'string' }] },
+    // `baseUrl` and `token` are also defined here, not only in the environments, because a collection
+    // file never carries its environments: clients that import just the collection (RapidAPI does) still
+    // get the variables. A selected environment overrides these. The token stays empty in the repo.
     variable: [
+      { key: 'baseUrl', value: DEPLOYED_BASE_URL },
+      { key: 'token', value: '' },
       { key: 'tripId', value: '' },
       { key: 'etag', value: '"1"' },
     ],
@@ -217,11 +224,7 @@ function environment(id: string, name: string, baseUrl: string): Json {
 export function buildEnvironments(): Record<string, Json> {
   return {
     'local.postman_environment.json': environment(LOCAL_ENV_ID, 'Imontour API (local)', 'http://localhost:3000'),
-    'deployed.postman_environment.json': environment(
-      DEPLOYED_ENV_ID,
-      'Imontour API (deployed)',
-      'https://imontour-api.vercel.app',
-    ),
+    'deployed.postman_environment.json': environment(DEPLOYED_ENV_ID, 'Imontour API (deployed)', DEPLOYED_BASE_URL),
   }
 }
 

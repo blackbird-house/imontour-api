@@ -73,6 +73,12 @@ describe('API client collection', () => {
     }
   })
 
+  it('keeps the token empty in the collection itself too, and defaults baseUrl to a public URL', () => {
+    const vars = Object.fromEntries((collection.variable as Json[]).map((v) => [v.key, v.value]))
+    expect(vars.token).toBe('')
+    expect(String(vars.baseUrl)).toMatch(/^https:\/\//)
+  })
+
   it('fails loudly for an operation that has no example yet', () => {
     const extended = structuredClone(doc)
     extended.paths['/v1/new'] = { get: { operationId: 'newThing', summary: 'New', tags: ['Trips'] } }

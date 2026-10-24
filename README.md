@@ -322,7 +322,7 @@ Notes for client generation:
 
 [`postman/`](postman) holds a ready-made request collection (Postman Collection v2.1, which RapidAPI, Postman, Insomnia and Bruno all import) and two environments. It is **generated** from `openapi.yaml` by `npm run collection`; CI runs `npm run collection:check` and fails if it is out of date, so it cannot drift from the API. Do not edit the JSON by hand: change the example bodies in `src/collection.ts` and regenerate. Adding an endpoint without an example there fails the build.
 
-1. Import `postman/imontour-api.postman_collection.json` and one environment (`local` or `deployed`; edit `baseUrl` if the API moves).
+1. Import `postman/imontour-api.postman_collection.json`. It carries its own `baseUrl` (the deployed API) and an empty `token` variable, so it works on its own; clients that import the collection only (RapidAPI does) still get them. The environment files (`local`, `deployed`) are optional: import one to switch `baseUrl` between your machine and the deployed API (edit it if the API moves).
 2. Set the `token` variable. It is empty in the repo on purpose and must never be committed.
    - **Local server:** `npm run -s token` prints one.
    - **Deployed API:** sign in a Supabase test user (Authentication > Users, "Auto Confirm User" ticked) and use the `access_token` it returns. It lasts about an hour.
