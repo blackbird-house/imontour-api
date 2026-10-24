@@ -173,7 +173,7 @@ Values for `supabase/.env` (secrets stay out of git):
 | `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` | Google Web client ID, then the iOS client ID, comma-separated |
 | `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` | Secret of the Google Web client |
 
-One-time setup outside the repo: enable Sign in with Apple on the app's identifier in the Apple Developer account, and create the Web and iOS OAuth clients in Google Cloud (the Web client's authorized redirect URI is `https://<ref>.supabase.co/auth/v1/callback`). The iOS app then signs in with the native SDKs and calls `signInWithIdToken`. Google's iOS SDK sends no nonce, hence `skip_nonce_check = true`.
+One-time setup outside the repo: enable Sign in with Apple on the app's identifier in the Apple Developer account, and create the Web and iOS OAuth clients in Google Cloud (the Web client's authorized redirect URI is `https://<ref>.supabase.co/auth/v1/callback`). The iOS app then signs in with the native SDKs and calls `signInWithIdToken`. The nonce check stays on (`skip_nonce_check = false`), so the app must generate a nonce, give Google its SHA-256 hash and pass the raw value to `signInWithIdToken`; skipping the check would allow a stolen Google ID token to be replayed.
 
 Not verified against a real project yet: run `supabase:diff` first and check the output.
 

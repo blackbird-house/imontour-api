@@ -17,5 +17,7 @@ enabled = true
 # Comma-separated: the iOS client ID and the Web client ID (the first one listed is the web one).
 client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
 secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
-# The native Google Sign-In SDK for iOS does not send a nonce; Supabase must skip the check.
-skip_nonce_check = true
+# Keep the nonce check on: the iOS app must pass a nonce to Google Sign-In (SHA-256 of the raw
+# nonce to Google, the raw nonce to Supabase). Only set this to true as a last resort, because
+# it lets a stolen Google ID token be replayed.
+skip_nonce_check = false
