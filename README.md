@@ -133,6 +133,7 @@ Dev shares the staging project's database but is isolated in its own schema. Mig
 | `AUTH_LOCAL_KEY_FILE` | local only | local | Local ES256 key pair file, created on first start | `.local/jwks.json` in the template |
 | `AUTH_ADMIN_URL` | no, with `AUTH_ADMIN_SERVICE_KEY` | dev, staging, prod | Supabase project URL, used to delete the auth user on `DELETE /v1/me`. Without it the provider account is left in place | none |
 | `AUTH_ADMIN_SERVICE_KEY` | no, with `AUTH_ADMIN_URL` | dev, staging, prod | Supabase secret key for the call above: a new `sb_secret_...` API key (sent as `apikey` only) or the legacy `service_role` JWT (also sent as bearer). Secret, full admin rights | none |
+| `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`, `APPLE_CLIENT_ID` | no, all four or none | dev, staging, prod | Let `DELETE /v1/me` revoke the user's Sign in with Apple token (see [Account deletion and Apple](#account-deletion-and-sign-in-with-apple)). Team id, key id and contents of the `.p8` key (newlines may be written `\n`), and the app's bundle id. The key is a secret. Without them the revoke is skipped | none |
 | `ADMIN_API_KEY` | no | dev, staging, prod | Turns on the operator-only `POST /v1/admin/export` (see [Data export](#data-export-operator-only)). At least 32 characters. Secret. Unset: the route does not exist (404) | none |
 | `CONFIG_FILE` | no | all | Remote config document served at `GET /v1/config` | `config/remote-config.json` |
 
@@ -199,6 +200,16 @@ curl -s -X POST https://<api>/v1/admin/export \
 - The address travels in the body, not the URL, and the audit log line (`admin export: users <ids>`) never contains it. Wrong or missing key: 401.
 - Rotate the key by changing the env var and redeploying. Remove it to switch the route off.
 
+### Account deletion and Sign in with Apple
+
+Apple requires an app that offers Sign in with Apple to **revoke the user's token** when they delete their account. Supabase does not do that, and a native sign-in gives us no refresh token, so the app sends a fresh authorization code on deletion:
+
+1. The app asks Apple for a new authorization (`ASAuthorizationAppleIDProvider`, `authorizationCode`) right before calling delete. A code is single-use and lasts about 5 minutes.
+2. It calls `DELETE /v1/me` with the header `X-Apple-Authorization-Code: <code>`. Apps that signed in another way omit the header.
+3. After deleting the data, the API signs a short-lived client secret (ES256, from `APPLE_*`), exchanges the code at `https://appleid.apple.com/auth/token` and revokes the resulting refresh token at `/auth/revoke`.
+
+Revoking is best effort, like the Supabase cleanup: a failure is logged (`apple token revoke failed (request <id>)`) and the answer is still 204, because the data is already gone. **Not verified against Apple yet**: the first real check is to sign in with a TestFlight build, delete the account with the header, then confirm the app disappears from Settings > Apple Account > Sign in with Apple. The `APPLE_CLIENT_ID` must be the bundle id the code was issued for. Create the key in Apple Developer > Keys with Sign in with Apple enabled; it does not expire (unlike a web client secret).
+
 ### Users and identities
 
 Our user id does not depend on the identity provider. A token only proves "issuer X says subject Y"; the API maps that pair to its own `users.id` and uses only that id (trips reference `users.id`, never the provider subject).
@@ -219,7 +230,7 @@ Bearer token -> verifier -> { issuer, subject, email? }
 
 - `GET /v1/me`: the profile (`id`, `displayName`, `email`, `locale`, `createdAt`, `updatedAt`).
 - `PATCH /v1/me`: change `displayName` (max 100 characters) and/or `locale` (a BCP 47 tag such as `en-GB`). Absent fields are unchanged, `null` clears, at least one field is required (422 otherwise). `id` and `email` cannot be changed.
-- `DELETE /v1/me`: hard-deletes the user; their trips and identities cascade (204). Required by Apple for apps with Sign in with Apple. Afterwards the identity provider is asked to delete the sign-in account through the `IdentityProviderAdmin` port (Supabase adapter when `AUTH_ADMIN_URL` and `AUTH_ADMIN_SERVICE_KEY` are set, no-op otherwise, including locally). Provider cleanup is best effort: a failure is logged and the request still answers 204. The Supabase adapter has not been exercised against a real project yet.
+- `DELETE /v1/me`: hard-deletes the user (and, with `X-Apple-Authorization-Code`, revokes the Sign in with Apple token); their trips and identities cascade (204). Required by Apple for apps with Sign in with Apple. Afterwards the identity provider is asked to delete the sign-in account through the `IdentityProviderAdmin` port (Supabase adapter when `AUTH_ADMIN_URL` and `AUTH_ADMIN_SERVICE_KEY` are set, no-op otherwise, including locally). Provider cleanup is best effort: a failure is logged and the request still answers 204. The Supabase adapter has not been exercised against a real project yet.
 
 A token that is still valid after deletion (it lives until `exp`) provisions a fresh, empty account on the next request. Clients should drop the session after a successful delete.
 

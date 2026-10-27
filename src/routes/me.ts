@@ -1,4 +1,5 @@
-import { createRoute, type OpenAPIHono } from '@hono/zod-openapi'
+import { createRoute, z, type OpenAPIHono } from '@hono/zod-openapi'
+import type { AppleTokenRevoker } from '../auth/appleRevoke.js'
 import type { AuthVariables } from '../auth/middleware.js'
 import type { IdentityProviderAdmin } from '../auth/providerAdmin.js'
 import { notFound } from '../errors.js'
@@ -79,7 +80,19 @@ const deleteMe = createRoute({
   summary: 'Delete the account',
   description:
     'Permanently deletes the user and all their trips, then asks the identity provider to delete the sign-in ' +
-    'account. Provider cleanup is best effort: a failure is logged and does not fail the request. Not undoable.',
+    'account. Provider cleanup is best effort: a failure is logged and does not fail the request. Not undoable. ' +
+    'An app that signed the user in with Apple must send `X-Apple-Authorization-Code`, obtained by asking Apple ' +
+    'for a fresh authorization at deletion time (a code is single-use and expires after about 5 minutes); the ' +
+    "server uses it to revoke the user's Sign in with Apple token, as Apple requires. Revoking is also best effort.",
+  request: {
+    headers: z.object({
+      'X-Apple-Authorization-Code': z
+        .string()
+        .max(2048)
+        .optional()
+        .openapi({ description: 'Fresh Sign in with Apple authorization code. Omit for other sign-in methods.' }),
+    }),
+  },
   responses: {
     204: { description: 'Deleted.' },
     401: errors.unauthorized,
@@ -88,7 +101,12 @@ const deleteMe = createRoute({
   },
 })
 
-export function registerMeRoutes(app: MeApp, users: UserRepo, identityAdmin: IdentityProviderAdmin): void {
+export function registerMeRoutes(
+  app: MeApp,
+  users: UserRepo,
+  identityAdmin: IdentityProviderAdmin,
+  appleRevoker: AppleTokenRevoker,
+): void {
   app.openapi(getMe, async (c) => {
     const user = await users.get(c.get('userId'))
     if (!user) throw notFound()
@@ -112,6 +130,13 @@ export function registerMeRoutes(app: MeApp, users: UserRepo, identityAdmin: Ide
         }),
       ),
     )
+    // Independent of the above: Apple wants the grant revoked whether or not our own cleanup worked.
+    const appleCode = c.req.valid('header')['X-Apple-Authorization-Code']?.trim()
+    if (appleCode) {
+      await appleRevoker.revoke(appleCode).catch((err: unknown) => {
+        console.error(`apple token revoke failed (request ${c.get('requestId') ?? '-'})`, err)
+      })
+    }
     return c.body(null, 204)
   })
 }

@@ -3,6 +3,7 @@ import { bodyLimit } from 'hono/body-limit'
 import { logger } from 'hono/logger'
 import { requestId } from 'hono/request-id'
 import { bearerAuth, type AuthVariables } from './auth/middleware.js'
+import type { AppleTokenRevoker } from './auth/appleRevoke.js'
 import type { IdentityProviderAdmin } from './auth/providerAdmin.js'
 import type { ResolveUser } from './auth/resolver.js'
 import type { VerifyToken } from './auth/verifier.js'
@@ -23,6 +24,7 @@ export type Deps = {
   verify: VerifyToken
   resolveUser: ResolveUser
   identityAdmin: IdentityProviderAdmin
+  appleRevoker: AppleTokenRevoker
   remoteConfig: RemoteConfigSource
   pingDatabase: PingDatabase
   exporter: ExportRepo
@@ -71,7 +73,7 @@ export function createApp(deps: Deps, opts: { requestLog?: boolean } = {}): Open
   app.route('/v1', healthRoute(deps.pingDatabase))
   if (deps.adminApiKey) app.route('/v1/admin', adminRoutes(deps.exporter, deps.adminApiKey))
   registerTripRoutes(app, deps.repo)
-  registerMeRoutes(app, deps.users, deps.identityAdmin)
+  registerMeRoutes(app, deps.users, deps.identityAdmin, deps.appleRevoker)
 
   return app
 }

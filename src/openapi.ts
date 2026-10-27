@@ -23,6 +23,7 @@ export function buildOpenApiDocument(): object {
     verify: unused,
     resolveUser: unused,
     identityAdmin: new Proxy({}, { get: () => unused }) as never,
+    appleRevoker: new Proxy({}, { get: () => unused }) as never,
     remoteConfig: unused,
     pingDatabase: unused,
     exporter: new Proxy({}, { get: () => unused }) as never,
