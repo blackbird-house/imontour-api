@@ -17,6 +17,8 @@ export type Config = {
   dbSchema: string
   auth: AuthConfig
   identityAdmin?: IdentityAdminConfig
+  /** Enables the operator-only /v1/admin routes. Absent: those routes do not exist. */
+  adminApiKey?: string
   configFile: string
 }
 
@@ -44,6 +46,7 @@ const schema = z.object({
   AUTH_LOCAL_KEY_FILE: optional,
   AUTH_ADMIN_URL: optional,
   AUTH_ADMIN_SERVICE_KEY: optional,
+  ADMIN_API_KEY: z.string().trim().min(32, 'must be at least 32 characters (e.g. `openssl rand -hex 32`)').optional(),
   CONFIG_FILE: z.string().trim().min(1).default('config/remote-config.json'),
 })
 
@@ -122,6 +125,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
   if (e.AUTH_ADMIN_URL && e.AUTH_ADMIN_SERVICE_KEY) {
     config.identityAdmin = { url: e.AUTH_ADMIN_URL, serviceKey: e.AUTH_ADMIN_SERVICE_KEY }
   }
+  if (e.ADMIN_API_KEY) config.adminApiKey = e.ADMIN_API_KEY
   return config
 }
 

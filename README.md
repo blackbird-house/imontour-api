@@ -133,6 +133,7 @@ Dev shares the staging project's database but is isolated in its own schema. Mig
 | `AUTH_LOCAL_KEY_FILE` | local only | local | Local ES256 key pair file, created on first start | `.local/jwks.json` in the template |
 | `AUTH_ADMIN_URL` | no, with `AUTH_ADMIN_SERVICE_KEY` | dev, staging, prod | Supabase project URL, used to delete the auth user on `DELETE /v1/me`. Without it the provider account is left in place | none |
 | `AUTH_ADMIN_SERVICE_KEY` | no, with `AUTH_ADMIN_URL` | dev, staging, prod | Supabase secret key for the call above: a new `sb_secret_...` API key (sent as `apikey` only) or the legacy `service_role` JWT (also sent as bearer). Secret, full admin rights | none |
+| `ADMIN_API_KEY` | no | dev, staging, prod | Turns on the operator-only `POST /v1/admin/export` (see [Data export](#data-export-operator-only)). At least 32 characters. Secret. Unset: the route does not exist (404) | none |
 | `CONFIG_FILE` | no | all | Remote config document served at `GET /v1/config` | `config/remote-config.json` |
 
 Safety guards, enforced at startup (a violation throws a `ConfigError` naming the variable):
@@ -182,6 +183,21 @@ One-time setup outside the repo: enable Sign in with Apple on the app's identifi
 Not verified against a real project yet: run `supabase:diff` first and check the output.
 
 `GET /v1/config` and `GET /v1/health` are public; everything under `/v1/trips` and `/v1/me` requires a token.
+
+### Data export (operator only)
+
+For access/portability requests that arrive by email. Not part of `openapi.yaml`, the client collection or the app: only you call it, with a secret that is not a user token. It exists only when `ADMIN_API_KEY` is set on that environment.
+
+```sh
+curl -s -X POST https://<api>/v1/admin/export \
+  -H "Authorization: Bearer $ADMIN_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"email":"person@example.com"}' -o export.json
+```
+
+- Returns `{ exportedAt, users: [{ user, identities, trips }] }`: the profile, sign-in identities and the full trip documents. The email match is case-insensitive; several accounts with the same email are all returned. 404 if there is none.
+- **Verify the requester first**: reply only to the address the account is registered with (or have them confirm from inside the app), and send the file through a secure channel.
+- The address travels in the body, not the URL, and the audit log line (`admin export: users <ids>`) never contains it. Wrong or missing key: 401.
+- Rotate the key by changing the env var and redeploying. Remove it to switch the route off.
 
 ### Users and identities
 

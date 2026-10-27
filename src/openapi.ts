@@ -25,6 +25,7 @@ export function buildOpenApiDocument(): object {
     identityAdmin: new Proxy({}, { get: () => unused }) as never,
     remoteConfig: unused,
     pingDatabase: unused,
+    exporter: new Proxy({}, { get: () => unused }) as never,
   })
   return app.getOpenAPI31Document({
     openapi: '3.1.0',
