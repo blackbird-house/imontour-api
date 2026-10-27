@@ -24,7 +24,7 @@ describe('API client collection', () => {
     const operations = Object.values(doc.paths).flatMap((ops) => Object.values(ops))
     expect(requests).toHaveLength(operations.length)
     expect(Object.keys(EXAMPLES).sort()).toEqual(operations.map((o) => o.operationId).sort())
-    expect(collection.item.map((f: Json) => f.name)).toEqual(['Config', 'Trips', 'Me'])
+    expect(collection.item.map((f: Json) => f.name)).toEqual(['Config', 'Health', 'Trips', 'Me'])
   })
 
   it('points every request at a real path and method of the API', () => {
@@ -40,11 +40,13 @@ describe('API client collection', () => {
     }
   })
 
-  it('sends bearer auth by default and nothing on the public config request', () => {
+  it('sends bearer auth by default and nothing on the public requests', () => {
     expect(collection.auth).toEqual({ type: 'bearer', bearer: [{ key: 'token', value: '{{token}}', type: 'string' }] })
-    const config = requests.find((r) => r.folder === 'Config')!.item
-    expect(config.request.auth).toEqual({ type: 'noauth' })
-    for (const { folder, item } of requests) if (folder !== 'Config') expect(item.request.auth).toBeUndefined()
+    const isPublic = (folder: string) => folder === 'Config' || folder === 'Health'
+    for (const { folder, item } of requests) {
+      if (isPublic(folder)) expect(item.request.auth).toEqual({ type: 'noauth' })
+      else expect(item.request.auth).toBeUndefined()
+    }
   })
 
   it('example bodies are accepted by the real request schemas', () => {

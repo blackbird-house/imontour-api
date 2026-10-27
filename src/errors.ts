@@ -68,6 +68,6 @@ export function errorHandler(err: Error, c: Context): Response {
       422,
     )
   }
-  console.error(err)
+  console.error(`request ${c.get('requestId') ?? '-'}:`, err)
   return c.json({ error: { code: 'internal', message: 'Internal server error' } }, 500)
 }

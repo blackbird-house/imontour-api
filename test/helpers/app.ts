@@ -27,6 +27,7 @@ export function stubDeps(over: Partial<Deps> = {}): Deps {
     resolveUser: unused,
     identityAdmin: { deleteIdentity: unused },
     remoteConfig: stubRemoteConfig,
+    pingDatabase: unused,
     ...over,
   }
 }
@@ -53,6 +54,9 @@ export async function createTestApp() {
     resolveUser,
     identityAdmin,
     remoteConfig: stubRemoteConfig,
+    pingDatabase: async () => {
+      await db`select 1`
+    },
   }
   const app = createApp(deps)
 

@@ -23,8 +23,8 @@ Status of the API today: all seven trip/profile/config operations are built, dep
 | 8 | **Prod Supabase project + staging/prod variable sets in Vercel** | The README describes dev, staging and prod; only one environment exists. | Pro upgrade |
 | 9 | **Vercel Function Region next to the database** (`dub1` or `lhr1`) | The function runs in `iad1` (US East) and the database is in `eu-west-1`: about 0.45 s per database call instead of about 0.1 s. | Pro upgrade |
 | 10 | **Database backups and point-in-time recovery** | Without them an accidental delete or bad migration is unrecoverable. | Pro upgrade |
-| 11 | **Error tracking, log retention and alerts** | Nothing tells us the API is failing; we find out from users. Vendor choice is deferred (see the platform audit). | Before release |
-| 12 | **Health endpoint + uptime monitor** | There is no `/v1/health`. An uptime check could also run a cheap smoke request. | Before release |
+| 11 | **Error tracking, log retention and alerts** | Nothing tells us the API is failing; we find out from users. Vendor choice is deferred (see the platform audit). Unexpected 500s now log `request <id>:` plus the error, so a tracker can be wired to that one place (`errorHandler`). | Before release |
+| 12 | ~~**Health endpoint + uptime monitor**~~ | Done: `GET /v1/health` (database check, 200/503). Still to do: create the uptime monitor itself once the custom domain is final. | Monitor: before release |
 | 13 | **Rate limiting / abuse protection** | None today. Vercel firewall rules and spend caps are the usual answer. Without a cap a loop or an attacker can run up a bill. | Before public release; likely needs Pro |
 | 14 | **Release housekeeping**: rotate the service-role key that was pasted in a chat, delete `.local/api-test-token`, upgrade Vercel and Supabase to Pro | Deliberately postponed until first release. | Release prep |
 | 15 | **Automate or gate migrations** | Migrations are run by hand before a deploy that needs them. Forgetting one means 500s in production. A CI gate ("migrations for this change were applied") or a documented release checklist would close it. | Before the second schema change |
@@ -37,7 +37,7 @@ Status of the API today: all seven trip/profile/config operations are built, dep
 | 17 | **Dependency updates and `npm audit` in CI** (Dependabot or Renovate) | The API is internet-facing; known-vulnerable packages should surface automatically. |
 | 18 | **Verify the database certificate** (`ssl: 'require'` encrypts but does not check the chain) | Needs Supabase's CA bundle. Protects against a man-in-the-middle between Vercel and the database. |
 | 19 | **Pool size under serverless concurrency** | Each function instance opens up to 5 connections (`max: 5`); many instances at once could exhaust the Supabase pooler's limit. Likely fine at small scale; revisit with load. |
-| 20 | **Request IDs in logs** | Correlating a client report with a log line needs an id on every request and error. |
+| 20 | ~~**Request IDs in logs**~~ | Done: `X-Request-Id` on every response; 500 log lines quote it. Ordinary request logging stays Vercel's. |
 | 21 | **Scheduled run of the black-box suite** against the deployed API | A cheap synthetic check: it already exists and passes. Needs a dedicated test user and token handling. |
 | 22 | **Swap `hono/vercel` for `@hono/vercel`** | The current import is deprecated and goes away in Hono v5. |
 | 23 | **JSON 404 for paths outside `/v1`** | Vercel answers those with its own plain-text page before the app runs. Harmless for the app; a catch-all rewrite would fix it. |
