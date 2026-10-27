@@ -7,6 +7,7 @@ TypeScript, Hono, Postgres. Runs locally as a Node server and in deployed enviro
 - Design: [docs/superpowers/specs/2026-10-20-imontour-api-design.md](docs/superpowers/specs/2026-10-20-imontour-api-design.md)
 - Plan: [docs/superpowers/plans/2026-10-20-imontour-api.md](docs/superpowers/plans/2026-10-20-imontour-api.md)
 - Backlog: [docs/backlog.md](docs/backlog.md), what is left after the first deployed version
+- Legal drafts: [docs/legal](docs/legal/README.md), data inventory, privacy policy, terms, App Store privacy labels (drafts, not published)
 
 ## Quick start (local)
 
