@@ -37,7 +37,7 @@ Account details and trips are kept until you delete your account. Technical logs
 ## Your rights and choices
 
 - **Delete your account and data:** in the app, ⟦Settings > Delete account⟧. This removes your account, your trips and your sign-in link, and we ask Apple/Google to revoke access.
-- **Access, correct, export:** you can edit your name and language in the app. For a copy of your data or any other request, write to ⟦privacy email⟧ and we will answer within one month. ⟦Update if an export feature is built.⟧
+- **Access, correct, export:** you can edit your name and language in the app. For a copy of your data or any other request, write to ⟦privacy email⟧ and we will answer within one month, after confirming the request comes from the account holder.
 - **Complain:** you may contact your local data-protection authority.
 
 ## Children
