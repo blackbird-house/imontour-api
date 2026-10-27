@@ -3,6 +3,7 @@ import type { IdentityProviderAdmin } from '../../src/auth/providerAdmin.js'
 import { createUserResolver } from '../../src/auth/resolver.js'
 import { createVerifier } from '../../src/auth/verifier.js'
 import { createTripRepo } from '../../src/repo/trips.js'
+import { createExportRepo } from '../../src/repo/export.js'
 import { createUserRepo } from '../../src/repo/users.js'
 import { createTestSchema, stopTestDatabase } from './db.js'
 import { TEST_AUDIENCE, TEST_ISSUER, jwksFor, makeKeyPair, signToken } from './tokens.js'
@@ -13,6 +14,8 @@ export type TestRequestInit = RequestInit & {
   /** Serialized as the JSON body, with `Content-Type: application/json`. */
   json?: unknown
 }
+
+export const TEST_ADMIN_KEY = 'k'.repeat(40)
 
 export const stubRemoteConfig = async () => ({ body: {}, etag: '"stub"' })
 
@@ -26,7 +29,10 @@ export function stubDeps(over: Partial<Deps> = {}): Deps {
     verify: unused,
     resolveUser: unused,
     identityAdmin: { deleteIdentity: unused },
+    appleRevoker: { revoke: unused },
     remoteConfig: stubRemoteConfig,
+    pingDatabase: unused,
+    exporter: { findByEmail: unused },
     ...over,
   }
 }
@@ -39,6 +45,7 @@ export async function createTestApp() {
     { issuer: TEST_ISSUER, audience: TEST_AUDIENCE, jwksUrl: 'http://unused' },
     await jwksFor(keyPair),
   )
+  const revoked: string[] = []
   const deleted: { issuer: string; subject: string }[] = []
   const identityAdmin: IdentityProviderAdmin = {
     deleteIdentity: async ({ issuer, subject }) => {
@@ -52,7 +59,13 @@ export async function createTestApp() {
     verify,
     resolveUser,
     identityAdmin,
+    appleRevoker: { revoke: async (code) => void revoked.push(code) },
     remoteConfig: stubRemoteConfig,
+    pingDatabase: async () => {
+      await db`select 1`
+    },
+    exporter: createExportRepo(db, schema),
+    adminApiKey: TEST_ADMIN_KEY,
   }
   const app = createApp(deps)
 
@@ -78,5 +91,5 @@ export async function createTestApp() {
     await stopTestDatabase()
   }
 
-  return { app, deps, db, schema, verify, tokenFor, userIdFor, deleted, request, stop }
+  return { app, deps, db, schema, verify, tokenFor, userIdFor, deleted, revoked, request, stop }
 }

@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, develop, staging]
 
 permissions:
   contents: read
@@ -43,3 +43,5 @@ jobs:
       - run: npm run build
       - run: npm test
       - run: npm run openapi:check
+      - run: npm run collection:check
+      - run: npm run legal:check

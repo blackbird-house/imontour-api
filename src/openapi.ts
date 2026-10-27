@@ -12,7 +12,7 @@ const DESCRIPTION =
   'REST API for Imontour trips. A trip is a document: it is read and replaced as a whole, ' +
   'with the revision as optimistic-concurrency token (ETag / If-Match). Trips and /v1/me require a ' +
   'JWT from the configured identity provider (Supabase today) sent as a Bearer token; the first ' +
-  'authenticated request creates the user. GET /v1/config is public. Clients must accept unknown ' +
+  'authenticated request creates the user. GET /v1/config and GET /v1/health are public. Clients must accept unknown ' +
   '`color`, `place.type` and `timing.mode` values, since new ones may be added without a version bump.'
 
 /** Builds the OpenAPI 3.1 document from the real route declarations. No I/O besides package.json. */
@@ -23,7 +23,10 @@ export function buildOpenApiDocument(): object {
     verify: unused,
     resolveUser: unused,
     identityAdmin: new Proxy({}, { get: () => unused }) as never,
+    appleRevoker: new Proxy({}, { get: () => unused }) as never,
     remoteConfig: unused,
+    pingDatabase: unused,
+    exporter: new Proxy({}, { get: () => unused }) as never,
   })
   return app.getOpenAPI31Document({
     openapi: '3.1.0',

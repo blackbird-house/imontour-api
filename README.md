@@ -6,6 +6,8 @@ TypeScript, Hono, Postgres. Runs locally as a Node server and in deployed enviro
 
 - Design: [docs/superpowers/specs/2026-10-20-imontour-api-design.md](docs/superpowers/specs/2026-10-20-imontour-api-design.md)
 - Plan: [docs/superpowers/plans/2026-10-20-imontour-api.md](docs/superpowers/plans/2026-10-20-imontour-api.md)
+- Backlog: [docs/backlog.md](docs/backlog.md), what is left after the first deployed version
+- Legal: [docs/legal](docs/legal/README.md), data inventory, privacy policy, terms, App Store privacy labels. Served at `/privacy` and `/terms` once finished (`npm run legal`)
 
 ## Quick start (local)
 
@@ -32,6 +34,9 @@ BASE=http://localhost:3000
 
 # Public remote config
 curl -s $BASE/v1/config
+
+# Public health check (queries the database)
+curl -s -i $BASE/v1/health
 
 # Create a trip with just a name (no destinations)
 curl -s -i -X POST $BASE/v1/trips \
@@ -128,6 +133,8 @@ Dev shares the staging project's database but is isolated in its own schema. Mig
 | `AUTH_LOCAL_KEY_FILE` | local only | local | Local ES256 key pair file, created on first start | `.local/jwks.json` in the template |
 | `AUTH_ADMIN_URL` | no, with `AUTH_ADMIN_SERVICE_KEY` | dev, staging, prod | Supabase project URL, used to delete the auth user on `DELETE /v1/me`. Without it the provider account is left in place | none |
 | `AUTH_ADMIN_SERVICE_KEY` | no, with `AUTH_ADMIN_URL` | dev, staging, prod | Supabase secret key for the call above: a new `sb_secret_...` API key (sent as `apikey` only) or the legacy `service_role` JWT (also sent as bearer). Secret, full admin rights | none |
+| `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`, `APPLE_CLIENT_ID` | no, all four or none | dev, staging, prod | Let `DELETE /v1/me` revoke the user's Sign in with Apple token (see [Account deletion and Apple](#account-deletion-and-sign-in-with-apple)). Team id, key id and contents of the `.p8` key (newlines may be written `\n`), and the app's bundle id. The key is a secret. Without them the revoke is skipped | none |
+| `ADMIN_API_KEY` | no | dev, staging, prod | Turns on the operator-only `POST /v1/admin/export` (see [Data export](#data-export-operator-only)). At least 32 characters. Secret. Unset: the route does not exist (404) | none |
 | `CONFIG_FILE` | no | all | Remote config document served at `GET /v1/config` | `config/remote-config.json` |
 
 Safety guards, enforced at startup (a violation throws a `ConfigError` naming the variable):
@@ -149,7 +156,59 @@ If the signing keys cannot be fetched (JWKS timeout, network error, non-200 or i
 
 Locally there is no Supabase: `npm run token` signs a token with the local key file that the local server trusts.
 
-`GET /v1/config` is public; everything under `/v1/trips` and `/v1/me` requires a token.
+### Sign in providers (Supabase config as code)
+
+The Apple and Google sign-in settings live in [`supabase/config.toml`](supabase/config.toml) and are pushed to the hosted Supabase projects with the Supabase CLI (a dev dependency). `config push` only touches properties declared in that file, so the rest of each project is left alone. The API needs no change: it only reads `iss`, `sub` and `email` from the token.
+
+Staging and prod are separate Supabase projects, so push once per project:
+
+```bash
+cp supabase/.env.example supabase/.env   # git-ignored; fill in the values for the target project
+npx supabase login                       # once
+npx supabase link --project-ref <ref>    # or pass --project-ref below
+npm run supabase:diff -- --project-ref <ref>   # preview
+npm run supabase:push -- --project-ref <ref>   # asks to confirm each change
+```
+
+Values for `supabase/.env` (secrets stay out of git):
+
+| Variable | Meaning |
+|---|---|
+| `SUPABASE_AUTH_EXTERNAL_APPLE_CLIENT_ID` | iOS bundle ID(s), comma-separated (native Sign in with Apple) |
+| `SUPABASE_AUTH_EXTERNAL_APPLE_SECRET` | Empty for native iOS only. A generated JWT (expires every 6 months) if a web client is added |
+| `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` | Google Web client ID, then the iOS client ID, comma-separated |
+| `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` | Secret of the Google Web client |
+
+One-time setup outside the repo: enable Sign in with Apple on the app's identifier in the Apple Developer account, and create the Web and iOS OAuth clients in Google Cloud (the Web client's authorized redirect URI is `https://<ref>.supabase.co/auth/v1/callback`). The iOS app then signs in with the native SDKs and calls `signInWithIdToken`. The nonce check stays on (`skip_nonce_check = false`), so the app must generate a nonce, give Google its SHA-256 hash and pass the raw value to `signInWithIdToken`; skipping the check would allow a stolen Google ID token to be replayed.
+
+Not verified against a real project yet: run `supabase:diff` first and check the output.
+
+`GET /v1/config` and `GET /v1/health` are public; everything under `/v1/trips` and `/v1/me` requires a token.
+
+### Data export (operator only)
+
+For access/portability requests that arrive by email. Not part of `openapi.yaml`, the client collection or the app: only you call it, with a secret that is not a user token. It exists only when `ADMIN_API_KEY` is set on that environment.
+
+```sh
+curl -s -X POST https://<api>/v1/admin/export \
+  -H "Authorization: Bearer $ADMIN_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"email":"person@example.com"}' -o export.json
+```
+
+- Returns `{ exportedAt, users: [{ user, identities, trips }] }`: the profile, sign-in identities and the full trip documents. The email match is case-insensitive; several accounts with the same email are all returned. 404 if there is none.
+- **Verify the requester first**: reply only to the address the account is registered with (or have them confirm from inside the app), and send the file through a secure channel.
+- The address travels in the body, not the URL, and the audit log line (`admin export: users <ids>`) never contains it. Wrong or missing key: 401.
+- Rotate the key by changing the env var and redeploying. Remove it to switch the route off.
+
+### Account deletion and Sign in with Apple
+
+Apple requires an app that offers Sign in with Apple to **revoke the user's token** when they delete their account. Supabase does not do that, and a native sign-in gives us no refresh token, so the app sends a fresh authorization code on deletion:
+
+1. The app asks Apple for a new authorization (`ASAuthorizationAppleIDProvider`, `authorizationCode`) right before calling delete. A code is single-use and lasts about 5 minutes.
+2. It calls `DELETE /v1/me` with the header `X-Apple-Authorization-Code: <code>`. Apps that signed in another way omit the header.
+3. After deleting the data, the API signs a short-lived client secret (ES256, from `APPLE_*`), exchanges the code at `https://appleid.apple.com/auth/token` and revokes the resulting refresh token at `/auth/revoke`.
+
+Revoking is best effort, like the Supabase cleanup: a failure is logged (`apple token revoke failed (request <id>)`) and the answer is still 204, because the data is already gone. **Not verified against Apple yet**: the first real check is to sign in with a TestFlight build, delete the account with the header, then confirm the app disappears from Settings > Apple Account > Sign in with Apple. The `APPLE_CLIENT_ID` must be the bundle id the code was issued for. Create the key in Apple Developer > Keys with Sign in with Apple enabled; it does not expire (unlike a web client secret).
 
 ### Users and identities
 
@@ -171,7 +230,7 @@ Bearer token -> verifier -> { issuer, subject, email? }
 
 - `GET /v1/me`: the profile (`id`, `displayName`, `email`, `locale`, `createdAt`, `updatedAt`).
 - `PATCH /v1/me`: change `displayName` (max 100 characters) and/or `locale` (a BCP 47 tag such as `en-GB`). Absent fields are unchanged, `null` clears, at least one field is required (422 otherwise). `id` and `email` cannot be changed.
-- `DELETE /v1/me`: hard-deletes the user; their trips and identities cascade (204). Required by Apple for apps with Sign in with Apple. Afterwards the identity provider is asked to delete the sign-in account through the `IdentityProviderAdmin` port (Supabase adapter when `AUTH_ADMIN_URL` and `AUTH_ADMIN_SERVICE_KEY` are set, no-op otherwise, including locally). Provider cleanup is best effort: a failure is logged and the request still answers 204. The Supabase adapter has not been exercised against a real project yet.
+- `DELETE /v1/me`: hard-deletes the user (and, with `X-Apple-Authorization-Code`, revokes the Sign in with Apple token); their trips and identities cascade (204). Required by Apple for apps with Sign in with Apple. Afterwards the identity provider is asked to delete the sign-in account through the `IdentityProviderAdmin` port (Supabase adapter when `AUTH_ADMIN_URL` and `AUTH_ADMIN_SERVICE_KEY` are set, no-op otherwise, including locally). Provider cleanup is best effort: a failure is logged and the request still answers 204. The Supabase adapter has not been exercised against a real project yet.
 
 A token that is still valid after deletion (it lives until `exp`) provisions a fresh, empty account on the next request. Clients should drop the session after a successful delete.
 
@@ -228,7 +287,6 @@ The Vercel wiring (rewrite, function entrypoint, bundled files) is covered by lo
 4. A missing or invalid environment variable shows up as a cold-start failure or 500 in the Vercel function logs, with a `ConfigError` message naming the variable.
 5. Source files are not served: `curl -i https://<preview>/package.json` and `curl -i https://<preview>/src/app.ts` must both return 404, not the file.
 6. The Data API is locked: `curl -s -i https://<project-ref>.supabase.co/rest/v1/trips -H "apikey: <anon-key>" -H "Authorization: Bearer <anon-key>"` must **not** return trip rows (expect 401/403/404 or `[]` with no data, never rows). Run it against `trips`, `users` and `identities` on staging and prod after migrating.
-7. `hono/vercel` is deprecated in Hono 4.13 and moves to `@hono/vercel` in Hono v5. Plan the swap when upgrading.
 
 ## Before release: upgrade Vercel and Supabase to Pro
 
@@ -295,6 +353,7 @@ Most tests call `app.fetch` in-process. `test/api` talks to a base URL over **re
 | `test/env.test.ts`, `test/env.examples.test.ts` | Config loading, safety guards, `env/*.example` drift |
 | `test/deps.test.ts`, `test/e2e.local.test.ts` | Dependency wiring and a full local lifecycle |
 | `test/api` | Black-box contract suite over real HTTP (local ephemeral server, or an opt-in remote one) |
+| `test/routes/health.test.ts` | Health check (200, 503, timeout) and `X-Request-Id` |
 | `test/lifecycle.test.ts` | Server startup (local setup, request logging, deployed mode) and graceful shutdown |
 | `test/routes/requestlog.test.ts` | Local request logging keeps the JSON 404/error handlers |
 | `test/errors.test.ts` | Error mapping (Postgres invalid-input codes to 422, generic 500) |
@@ -304,7 +363,7 @@ Most tests call `app.fetch` in-process. `test/api` talks to a base URL over **re
 
 [`openapi.yaml`](openapi.yaml) is generated from the Zod schemas and route declarations. Regenerate it with `npm run openapi` and commit the result; CI runs `npm run openapi:check` and fails if it is out of date.
 
-Operation ids: `listTrips`, `createTrip`, `getTrip`, `replaceTrip`, `renameTrip`, `deleteTrip`, `getMe`, `updateMe`, `deleteMe`, `getConfig`.
+Operation ids: `listTrips`, `createTrip`, `getTrip`, `replaceTrip`, `renameTrip`, `deleteTrip`, `getMe`, `updateMe`, `deleteMe`, `getConfig`, `getHealth`.
 
 Notes for client generation:
 
@@ -317,6 +376,24 @@ Notes for client generation:
 - `schemaVersion` is an integer; only `1` exists. Treat a value above 1 as unsupported.
 - `If-Match` is documented as required on PUT; a request without it gets 428.
 - Authenticated operations can answer 503 when the auth key service is unreachable (see [Auth](#auth)).
+
+## API client collection
+
+[`postman/`](postman) holds a ready-made request collection (Postman Collection v2.1, which RapidAPI, Postman, Insomnia and Bruno all import) and two environments. It is **generated** from `openapi.yaml` by `npm run collection`; CI runs `npm run collection:check` and fails if it is out of date, so it cannot drift from the API. Do not edit the JSON by hand: change the example bodies in `src/collection.ts` and regenerate. Adding an endpoint without an example there fails the build.
+
+1. Import `postman/imontour-api.postman_collection.json`. It carries its own `baseUrl` (the deployed API) and an empty `token` variable, so it works on its own; clients that import the collection only (RapidAPI does) still get them. The environment files (`local`, `deployed`) are optional: import one to switch `baseUrl` between your machine and the deployed API (edit it if the API moves).
+2. Set the `token` variable. It is empty in the repo on purpose and must never be committed.
+   - **Local server:** `npm run -s token` prints one.
+   - **Deployed API:** sign in a Supabase test user (Authentication > Users, "Auto Confirm User" ticked) and use the `access_token` it returns. It lasts about an hour.
+
+     ```sh
+     curl -s "https://<project-ref>.supabase.co/auth/v1/token?grant_type=password" \
+       -H "apikey: <anon or publishable key>" -H "Content-Type: application/json" \
+       -d '{"email":"<test-user-email>","password":"<password>"}'
+     ```
+3. Run **Create a trip** first. In Postman the requests fill `{{tripId}}` and `{{etag}}` themselves; in other clients copy the trip `id` and the `ETag` header by hand. **Replace a trip** needs the current ETag in `If-Match` (send it back exactly as received, weak or strong). Renaming does not use `If-Match`.
+
+The last request, **Delete the account**, deletes the signed-in user and all their data; use a test user.
 
 ## API behavior notes
 
@@ -332,6 +409,8 @@ Notes for client generation:
 - **Text:** strings containing a NUL character or an unpaired UTF-16 surrogate are rejected with 422 (Postgres cannot store them).
 - **Limits:** 1 MB body (413) and at most 200 destinations (422).
 - **List:** `limit` defaults to 20 (max 100); `nextCursor` is an opaque string, `null` on the last page; a bad cursor is 400. Pagination never returns a duplicate, but a trip edited between page requests (for example from another device) moves to the front and can be missing from that traversal until the list is reloaded from page 1.
+- `GET /v1/health` is public and never cached (`Cache-Control: no-store`). It runs `select 1` against the database: `200 {"status":"ok"}`, or `503 {"status":"unavailable"}` if the database fails or does not answer within 3 s. The body carries no versions or error details; the reason goes to the function log. Point an uptime monitor at it (alert on anything but 200).
+- **Request ids:** every response carries `X-Request-Id` (a client-supplied one is kept, otherwise a UUID is generated). The log line of an unexpected 500 starts with `request <id>:`, so a client report can be matched to a Vercel log entry.
 - `GET /v1/config` is public, sends an `ETag` and `Cache-Control: no-cache`, and answers 304 to a matching `If-None-Match`.
 
 ## Project layout
@@ -354,8 +433,24 @@ env/                  per-environment variable templates
 docker/, docker-compose.yml   local Postgres (development only)
 test/                 vitest suites
 openapi.yaml          generated API description
+postman/              generated API client collection and environments (npm run collection)
 ```
 
 ## Git workflow
 
-Work on feature branches and open pull requests; do not merge without review. CI (`.github/workflows/ci.yml`) runs lint, type-check, tests against Postgres 16, and the OpenAPI check on every pull request and on pushes to `main`.
+Three long-lived branches, promoted in one direction:
+
+| Branch | Holds | Receives |
+|---|---|---|
+| `develop` | integrated work, always the base for new work | feature pull requests |
+| `staging` | what is being prepared for release | pull requests from `develop` |
+| `main` | released code only, every release is tagged `vX.Y.Z` | pull requests from `staging` |
+
+1. **Start every piece of work from `develop`:** `git switch develop && git pull && git switch -c <type>/<short-name>`. Never branch from `main` or `staging`.
+2. **Open the pull request into `develop`.** Do not merge without review.
+3. **Promote:** open a pull request from `develop` into `staging` when you want to test the combined work there.
+4. **Release:** when `staging` is ready, open a pull request from `staging` into `main`, merge it, then tag that `main` commit (`git tag vX.Y.Z && git push origin vX.Y.Z`) and publish the release.
+
+Use merge commits (not squash) for the promotion pull requests (`develop` into `staging`, `staging` into `main`) so the long-lived branches never diverge. Nobody pushes directly to `develop`, `staging` or `main`.
+
+CI (`.github/workflows/ci.yml`) runs lint, format check, type-check, tests against Postgres 16, and the OpenAPI check on every pull request and on pushes to `develop`, `staging` and `main`. Vercel deploys `main` to the one environment that exists today, so a merge into `main` goes live.
