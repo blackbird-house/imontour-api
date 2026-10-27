@@ -14,7 +14,7 @@ Status of the API today: all seven trip/profile/config operations are built, dep
 | 4 | **Real data must not live in the `dev` schema** | Today the only environment is `dev` in the staging project. Whatever users create there would have to be migrated into the prod project at launch. | Create the prod project and cut over before users arrive. Needs Pro. |
 | 5 | **Per-user limits** (max trips per user, max total size) | A trip is capped at 1 MB and 200 destinations, but one user can create unlimited trips. That is a cheap way to fill the database. | Before public release |
 | 6 | **Trip document `schemaVersion` upgrade plan** | The server accepts only `schemaVersion: 1` and rejects `2` with 422. When the app needs v2, server and app must roll out in a safe order, and old app versions must keep working. | Before the first change to the trip document |
-| 7 | **Privacy policy and terms URLs, App Store privacy labels** | App Store Connect requires them. We store email, locale and trip data in the EU (`eu-west-1`). Data deletion exists; data export does not. | Before App Store submission |
+| 7 | **Privacy policy and terms URLs, App Store privacy labels** | App Store Connect requires them. We store email, locale and trip data in the EU (`eu-west-1`). Data deletion exists; data export does not. Drafts and a data inventory are in [docs/legal](legal/README.md); still needs the legal entity, a lawyer's review, a hosting decision for the public URLs and a decision on data export. | Before App Store submission |
 
 ## 2. Operations (mostly need a paid plan)
 
@@ -39,7 +39,7 @@ Status of the API today: all seven trip/profile/config operations are built, dep
 | 19 | **Pool size under serverless concurrency** | Each function instance opens up to 5 connections (`max: 5`); many instances at once could exhaust the Supabase pooler's limit. Likely fine at small scale; revisit with load. |
 | 20 | ~~**Request IDs in logs**~~ | Done: `X-Request-Id` on every response; 500 log lines quote it. Ordinary request logging stays Vercel's. |
 | 21 | **Scheduled run of the black-box suite** against the deployed API | A cheap synthetic check: it already exists and passes. Needs a dedicated test user and token handling. |
-| 22 | **Swap `hono/vercel` for `@hono/vercel`** | The current import is deprecated and goes away in Hono v5. |
+| 22 | ~~**Swap `hono/vercel` for `@hono/vercel`**~~ | Done: `api/index.ts` imports `handle` from `@hono/vercel`. Check the first deploy answers `/v1/config`. |
 | 23 | **JSON 404 for paths outside `/v1`** | Vercel answers those with its own plain-text page before the app runs. Harmless for the app; a catch-all rewrite would fix it. |
 | 24 | **Trip list reads the full `destinations` data** to build summaries | Fine at realistic sizes (worst case about 100 MB per page at the 1 MB cap); extract only needed fields in SQL if trips get large. |
 | 25 | **Startup failure logs the raw error object** | Low risk; log `message` and `code` only. |

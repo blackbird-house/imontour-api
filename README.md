@@ -7,6 +7,7 @@ TypeScript, Hono, Postgres. Runs locally as a Node server and in deployed enviro
 - Design: [docs/superpowers/specs/2026-10-20-imontour-api-design.md](docs/superpowers/specs/2026-10-20-imontour-api-design.md)
 - Plan: [docs/superpowers/plans/2026-10-20-imontour-api.md](docs/superpowers/plans/2026-10-20-imontour-api.md)
 - Backlog: [docs/backlog.md](docs/backlog.md), what is left after the first deployed version
+- Legal drafts: [docs/legal](docs/legal/README.md), data inventory, privacy policy, terms, App Store privacy labels (drafts, not published)
 
 ## Quick start (local)
 
@@ -275,7 +276,6 @@ The Vercel wiring (rewrite, function entrypoint, bundled files) is covered by lo
 4. A missing or invalid environment variable shows up as a cold-start failure or 500 in the Vercel function logs, with a `ConfigError` message naming the variable.
 5. Source files are not served: `curl -i https://<preview>/package.json` and `curl -i https://<preview>/src/app.ts` must both return 404, not the file.
 6. The Data API is locked: `curl -s -i https://<project-ref>.supabase.co/rest/v1/trips -H "apikey: <anon-key>" -H "Authorization: Bearer <anon-key>"` must **not** return trip rows (expect 401/403/404 or `[]` with no data, never rows). Run it against `trips`, `users` and `identities` on staging and prod after migrating.
-7. `hono/vercel` is deprecated in Hono 4.13 and moves to `@hono/vercel` in Hono v5. Plan the swap when upgrading.
 
 ## Before release: upgrade Vercel and Supabase to Pro
 
