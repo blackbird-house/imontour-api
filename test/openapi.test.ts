@@ -82,9 +82,9 @@ describe('OpenAPI document', () => {
     expect(doc.components.schemas.TripInput.properties.schemaVersion.default).toBe(1)
   })
 
-  it('tags operations Trips, Me and Config', () => {
+  it('tags operations Trips, Me, Config and Health', () => {
     const tags = new Set(operations().flatMap(({ op }) => op.tags as string[]))
-    expect([...tags].sort()).toEqual(['Config', 'Me', 'Trips'])
+    expect([...tags].sort()).toEqual(['Config', 'Health', 'Me', 'Trips'])
   })
 
   it('defines the bearerAuth scheme and applies it to trips and me only', () => {
@@ -121,10 +121,11 @@ describe('OpenAPI document', () => {
     expect(post.responses['409']).toBeDefined()
   })
 
-  it('marks GET /v1/config as explicitly public (security: []) and everything else as bearer-protected', () => {
-    expect(doc.paths['/v1/config'].get.security).toEqual([])
+  it('marks GET /v1/config and GET /v1/health as explicitly public (security: []) and everything else as bearer-protected', () => {
+    const publicPaths = ['/v1/config', '/v1/health']
+    for (const path of publicPaths) expect(doc.paths[path].get.security, path).toEqual([])
     for (const [path, ops] of Object.entries(doc.paths as Json)) {
-      if (path === '/v1/config') continue
+      if (publicPaths.includes(path)) continue
       for (const method of METHODS) {
         if (ops[method]) expect(ops[method].security, `${method} ${path}`).toEqual([{ bearerAuth: [] }])
       }
@@ -157,9 +158,11 @@ describe('OpenAPI document', () => {
     }
   })
 
-  it('declares 503 on every authenticated operation and nowhere else', () => {
+  it('declares 503 on every authenticated operation and on the health check, nowhere else', () => {
     for (const { path, method, op } of operations()) {
-      expect(op.responses['503'] !== undefined, `${method} ${path} 503`).toBe((op.security ?? []).length > 0)
+      expect(op.responses['503'] !== undefined, `${method} ${path} 503`).toBe(
+        (op.security ?? []).length > 0 || path === '/v1/health',
+      )
     }
   })
 
@@ -180,11 +183,12 @@ describe('OpenAPI document', () => {
       'patch /v1/trips/{id}': 'renameTrip',
       'delete /v1/trips/{id}': 'deleteTrip',
       'get /v1/config': 'getConfig',
+      'get /v1/health': 'getHealth',
       'get /v1/me': 'getMe',
       'patch /v1/me': 'updateMe',
       'delete /v1/me': 'deleteMe',
     })
-    expect(new Set(Object.values(ids)).size).toBe(10)
+    expect(new Set(Object.values(ids)).size).toBe(11)
   })
 
   it('documents the Me schemas: User fields, and UpdateUser with both fields optional and nullable', () => {

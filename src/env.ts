@@ -10,6 +10,8 @@ export type AuthConfig = {
 }
 /** Credentials for deleting the account at the identity provider (Supabase admin API). */
 export type IdentityAdminConfig = { url: string; serviceKey: string }
+/** Credentials for revoking the Sign in with Apple grant when an account is deleted. */
+export type AppleRevokeConfig = { teamId: string; keyId: string; privateKey: string; clientId: string }
 export type Config = {
   appEnv: AppEnv
   port: number
@@ -17,6 +19,9 @@ export type Config = {
   dbSchema: string
   auth: AuthConfig
   identityAdmin?: IdentityAdminConfig
+  /** Enables the operator-only /v1/admin routes. Absent: those routes do not exist. */
+  adminApiKey?: string
+  appleRevoke?: AppleRevokeConfig
   configFile: string
 }
 
@@ -44,6 +49,11 @@ const schema = z.object({
   AUTH_LOCAL_KEY_FILE: optional,
   AUTH_ADMIN_URL: optional,
   AUTH_ADMIN_SERVICE_KEY: optional,
+  APPLE_TEAM_ID: optional,
+  APPLE_KEY_ID: optional,
+  APPLE_PRIVATE_KEY: optional,
+  APPLE_CLIENT_ID: optional,
+  ADMIN_API_KEY: z.string().trim().min(32, 'must be at least 32 characters (e.g. `openssl rand -hex 32`)').optional(),
   CONFIG_FILE: z.string().trim().min(1).default('config/remote-config.json'),
 })
 
@@ -102,6 +112,11 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     throw new ConfigError('AUTH_ADMIN_URL and AUTH_ADMIN_SERVICE_KEY must be set together')
   }
 
+  const apple = [e.APPLE_TEAM_ID, e.APPLE_KEY_ID, e.APPLE_PRIVATE_KEY, e.APPLE_CLIENT_ID]
+  if (apple.some(Boolean) && !apple.every(Boolean)) {
+    throw new ConfigError('APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY and APPLE_CLIENT_ID must be set together')
+  }
+
   if (e.APP_ENV !== 'local' && isLocalHost(hostOf(e.DATABASE_URL))) {
     throw new ConfigError(`DATABASE_URL must not point at a local host when APP_ENV=${e.APP_ENV}`)
   }
@@ -122,6 +137,15 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
   if (e.AUTH_ADMIN_URL && e.AUTH_ADMIN_SERVICE_KEY) {
     config.identityAdmin = { url: e.AUTH_ADMIN_URL, serviceKey: e.AUTH_ADMIN_SERVICE_KEY }
   }
+  if (e.APPLE_TEAM_ID && e.APPLE_KEY_ID && e.APPLE_PRIVATE_KEY && e.APPLE_CLIENT_ID) {
+    config.appleRevoke = {
+      teamId: e.APPLE_TEAM_ID,
+      keyId: e.APPLE_KEY_ID,
+      privateKey: e.APPLE_PRIVATE_KEY,
+      clientId: e.APPLE_CLIENT_ID,
+    }
+  }
+  if (e.ADMIN_API_KEY) config.adminApiKey = e.ADMIN_API_KEY
   return config
 }
 

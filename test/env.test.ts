@@ -39,6 +39,24 @@ describe('loadConfig', () => {
     expect(c.auth.audience).toBe('aud')
   })
 
+  it('enables the admin routes only with a long enough ADMIN_API_KEY', () => {
+    expect(loadConfig(base).adminApiKey).toBeUndefined()
+    expect(loadConfig({ ...base, ADMIN_API_KEY: 'a'.repeat(32) }).adminApiKey).toBe('a'.repeat(32))
+    expect(() => loadConfig({ ...base, ADMIN_API_KEY: 'short' })).toThrow(/ADMIN_API_KEY/)
+  })
+
+  it('loads Apple revoke credentials only when all four are set', () => {
+    const apple = { APPLE_TEAM_ID: 'T', APPLE_KEY_ID: 'K', APPLE_PRIVATE_KEY: 'pem', APPLE_CLIENT_ID: 'com.x' }
+    expect(loadConfig(base).appleRevoke).toBeUndefined()
+    expect(loadConfig({ ...base, ...apple }).appleRevoke).toEqual({
+      teamId: 'T',
+      keyId: 'K',
+      privateKey: 'pem',
+      clientId: 'com.x',
+    })
+    expect(() => loadConfig({ ...base, ...apple, APPLE_KEY_ID: undefined })).toThrow(/must be set together/)
+  })
+
   it('throws naming DATABASE_URL when missing', () => {
     expect(() => loadConfig({ ...base, DATABASE_URL: undefined })).toThrow(ConfigError)
     expect(() => loadConfig({ ...base, DATABASE_URL: undefined })).toThrow(/DATABASE_URL/)

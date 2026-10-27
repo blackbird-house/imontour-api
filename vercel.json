@@ -1,4 +1,5 @@
 {
+  "cleanUrls": true,
   "rewrites": [{ "source": "/v1/(.*)", "destination": "/api" }],
   "functions": {
     "api/index.ts": { "includeFiles": "config/**" }

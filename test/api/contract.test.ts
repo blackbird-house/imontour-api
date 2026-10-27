@@ -81,6 +81,16 @@ async function expectError(res: Response, status: number, code: string): Promise
   return body
 }
 
+describe('GET /v1/health', () => {
+  it('is public, reports the database as reachable and is never cached', async () => {
+    const res = await call('/v1/health', { token: null })
+    expect(res.status).toBe(200)
+    expect(res.headers.get('cache-control')).toBe('no-store')
+    expect(res.headers.get('x-request-id')).toBeTruthy()
+    expect(await res.json()).toEqual({ status: 'ok' })
+  })
+})
+
 describe('GET /v1/config', () => {
   it('is public, served as JSON with an ETag and no-cache', async () => {
     const res = await call('/v1/config', { token: null })
