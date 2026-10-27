@@ -23,7 +23,7 @@ Not collected by the backend: precise device location (coordinates in trips are 
 
 ## Gaps the policy has to be honest about
 
-1. **No data export.** There is `DELETE /v1/me` but nothing like `GET /v1/me/export`. GDPR portability (art. 20) applies to EU users. Either build an export endpoint or give a contact address that answers requests by hand.
-2. **Apple token revoke on deletion** is unverified (backlog #3).
+1. **Data export is manual.** Users ask by email; the operator runs the private `POST /v1/admin/export` (README, "Data export"), after confirming the requester owns the account, and sends the JSON back. Needs `ADMIN_API_KEY` on the environment. There is deliberately no export endpoint for users.
+2. **Apple token revoke on deletion** is implemented (`X-Apple-Authorization-Code`, README) but not yet verified against Apple (backlog #3).
 3. **Log retention** period is not known; fill it in after the Pro upgrade.
 4. **Backups** (backlog #10) will hold deleted data for the backup window once enabled; the policy should say so.
