@@ -90,7 +90,17 @@ export const EXAMPLES: Record<string, Example> = {
   deleteTrip: {},
   getMe: {},
   updateMe: { body: { displayName: 'Test User', locale: 'en-GB' } },
-  deleteMe: {},
+  deleteMe: {
+    headers: [
+      {
+        key: 'X-Apple-Authorization-Code',
+        value: '',
+        description:
+          'Apps that signed in with Apple send a fresh authorization code so the server can revoke the Apple token.',
+        disabled: true,
+      },
+    ],
+  },
 }
 
 const CAPTURE_TRIP_SCRIPT = [

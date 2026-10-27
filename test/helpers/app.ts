@@ -29,6 +29,7 @@ export function stubDeps(over: Partial<Deps> = {}): Deps {
     verify: unused,
     resolveUser: unused,
     identityAdmin: { deleteIdentity: unused },
+    appleRevoker: { revoke: unused },
     remoteConfig: stubRemoteConfig,
     pingDatabase: unused,
     exporter: { findByEmail: unused },
@@ -44,6 +45,7 @@ export async function createTestApp() {
     { issuer: TEST_ISSUER, audience: TEST_AUDIENCE, jwksUrl: 'http://unused' },
     await jwksFor(keyPair),
   )
+  const revoked: string[] = []
   const deleted: { issuer: string; subject: string }[] = []
   const identityAdmin: IdentityProviderAdmin = {
     deleteIdentity: async ({ issuer, subject }) => {
@@ -57,6 +59,7 @@ export async function createTestApp() {
     verify,
     resolveUser,
     identityAdmin,
+    appleRevoker: { revoke: async (code) => void revoked.push(code) },
     remoteConfig: stubRemoteConfig,
     pingDatabase: async () => {
       await db`select 1`
@@ -88,5 +91,5 @@ export async function createTestApp() {
     await stopTestDatabase()
   }
 
-  return { app, deps, db, schema, verify, tokenFor, userIdFor, deleted, request, stop }
+  return { app, deps, db, schema, verify, tokenFor, userIdFor, deleted, revoked, request, stop }
 }

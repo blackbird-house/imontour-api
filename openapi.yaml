@@ -1029,7 +1029,16 @@ paths:
         - bearerAuth: []
       operationId: deleteMe
       summary: Delete the account
-      description: "Permanently deletes the user and all their trips, then asks the identity provider to delete the sign-in account. Provider cleanup is best effort: a failure is logged and does not fail the request. Not undoable."
+      description: "Permanently deletes the user and all their trips, then asks the identity provider to delete the sign-in account. Provider cleanup is best effort: a failure is logged and does not fail the request. Not undoable. An app that signed the user in with Apple must send `X-Apple-Authorization-Code`, obtained by asking Apple for a fresh authorization at deletion time (a code is single-use and expires after about 5 minutes); the server uses it to revoke the user's Sign in with Apple token, as Apple requires. Revoking is also best effort."
+      parameters:
+        - schema:
+            type: string
+            maxLength: 2048
+            description: Fresh Sign in with Apple authorization code. Omit for other sign-in methods.
+          required: false
+          description: Fresh Sign in with Apple authorization code. Omit for other sign-in methods.
+          name: X-Apple-Authorization-Code
+          in: header
       responses:
         "204":
           description: Deleted.

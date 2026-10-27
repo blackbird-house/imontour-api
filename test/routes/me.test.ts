@@ -247,6 +247,41 @@ describe('DELETE /v1/me', () => {
     expect(await t.db`select 1 from ${t.db(t.schema)}.users where id = ${await t.userIdFor(subject)}`).toHaveLength(1)
   })
 
+  it('revokes the Apple grant when the app sends an authorization code, and ignores it otherwise', async () => {
+    const withCode = randomUUID()
+    await t.request('/v1/me', { method: 'GET', as: withCode })
+    const res = await t.request('/v1/me', {
+      method: 'DELETE',
+      as: withCode,
+      headers: { 'X-Apple-Authorization-Code': ' code-123 ' },
+    })
+    expect(res.status).toBe(204)
+    expect(t.revoked).toContain('code-123')
+
+    const before = t.revoked.length
+    const without = randomUUID()
+    await t.request('/v1/me', { method: 'GET', as: without })
+    expect((await t.request('/v1/me', { method: 'DELETE', as: without })).status).toBe(204)
+    expect(t.revoked).toHaveLength(before)
+  })
+
+  it('still answers 204 when the Apple revoke fails, and logs it', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const app = createApp({ ...t.deps, appleRevoker: { revoke: () => Promise.reject(new Error('apple down')) } })
+      const subject = randomUUID()
+      await t.userIdFor(subject)
+      const res = await app.request('/v1/me', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${await t.tokenFor(subject)}`, 'X-Apple-Authorization-Code': 'c' },
+      })
+      expect(res.status).toBe(204)
+      expect(spy).toHaveBeenCalled()
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
   it('does not apply the body limit to DELETE', async () => {
     const res = await t.request('/v1/me', {
       method: 'DELETE',

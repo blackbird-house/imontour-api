@@ -1,4 +1,5 @@
 import type { Deps } from './app.js'
+import { createAppleRevoker, createNoopAppleRevoker } from './auth/appleRevoke.js'
 import { createNoopIdentityAdmin } from './auth/providerAdmin.js'
 import { createUserResolver } from './auth/resolver.js'
 import { createSupabaseIdentityAdmin } from './auth/supabaseAdmin.js'
@@ -24,6 +25,7 @@ export function buildDeps(config: Config, db: Db = createDb(config.databaseUrl))
     identityAdmin: config.identityAdmin
       ? createSupabaseIdentityAdmin({ ...config.identityAdmin, issuer: config.auth.issuer })
       : createNoopIdentityAdmin(),
+    appleRevoker: config.appleRevoke ? createAppleRevoker(config.appleRevoke) : createNoopAppleRevoker(),
     remoteConfig: createFileConfigSource(config.configFile),
     exporter: createExportRepo(db, config.dbSchema),
     ...(config.adminApiKey ? { adminApiKey: config.adminApiKey } : {}),
