@@ -1,7 +1,7 @@
 // Vercel adapter (Node.js runtime). Thin on purpose: all wiring lives in src/deps.ts.
 // Migrations are never run here, and nothing in CI or Vercel runs them: apply them with
 // `npm run migrate` against the environment before the new code goes live.
-import { handle } from 'hono/vercel'
+import { handle } from '@hono/vercel'
 import { createApp } from '../src/app.js'
 import { buildDeps } from '../src/deps.js'
 import { assertVercelConfig, loadConfig } from '../src/env.js'

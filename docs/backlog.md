@@ -39,7 +39,7 @@ Status of the API today: all seven trip/profile/config operations are built, dep
 | 19 | **Pool size under serverless concurrency** | Each function instance opens up to 5 connections (`max: 5`); many instances at once could exhaust the Supabase pooler's limit. Likely fine at small scale; revisit with load. |
 | 20 | **Request IDs in logs** | Correlating a client report with a log line needs an id on every request and error. |
 | 21 | **Scheduled run of the black-box suite** against the deployed API | A cheap synthetic check: it already exists and passes. Needs a dedicated test user and token handling. |
-| 22 | **Swap `hono/vercel` for `@hono/vercel`** | The current import is deprecated and goes away in Hono v5. |
+| 22 | ~~**Swap `hono/vercel` for `@hono/vercel`**~~ | Done: `api/index.ts` imports `handle` from `@hono/vercel`. Check the first deploy answers `/v1/config`. |
 | 23 | **JSON 404 for paths outside `/v1`** | Vercel answers those with its own plain-text page before the app runs. Harmless for the app; a catch-all rewrite would fix it. |
 | 24 | **Trip list reads the full `destinations` data** to build summaries | Fine at realistic sizes (worst case about 100 MB per page at the 1 MB cap); extract only needed fields in SQL if trips get large. |
 | 25 | **Startup failure logs the raw error object** | Low risk; log `message` and `code` only. |
