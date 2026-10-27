@@ -63,6 +63,7 @@ export const EXAMPLES: Record<string, Example> = {
       },
     ],
   },
+  getHealth: {},
   listTrips: {
     query: [
       { key: 'limit', value: '20', description: 'Page size, 1-100.' },

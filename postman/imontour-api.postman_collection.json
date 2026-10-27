@@ -72,6 +72,37 @@
       ]
     },
     {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health check (public)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "health"
+              ]
+            },
+            "description": "Health check (public)\n\nNo authentication. Runs a trivial query against the database, so it is meant for uptime monitors (and as a cheap smoke test), not for clients to call on every launch.",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "Trips",
       "item": [
         {

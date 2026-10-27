@@ -24,5 +24,8 @@ export function buildDeps(config: Config, db: Db = createDb(config.databaseUrl))
       ? createSupabaseIdentityAdmin({ ...config.identityAdmin, issuer: config.auth.issuer })
       : createNoopIdentityAdmin(),
     remoteConfig: createFileConfigSource(config.configFile),
+    pingDatabase: async () => {
+      await db`select 1`
+    },
   }
 }

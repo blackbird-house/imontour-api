@@ -34,6 +34,9 @@ BASE=http://localhost:3000
 # Public remote config
 curl -s $BASE/v1/config
 
+# Public health check (queries the database)
+curl -s -i $BASE/v1/health
+
 # Create a trip with just a name (no destinations)
 curl -s -i -X POST $BASE/v1/trips \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
@@ -177,7 +180,7 @@ One-time setup outside the repo: enable Sign in with Apple on the app's identifi
 
 Not verified against a real project yet: run `supabase:diff` first and check the output.
 
-`GET /v1/config` is public; everything under `/v1/trips` and `/v1/me` requires a token.
+`GET /v1/config` and `GET /v1/health` are public; everything under `/v1/trips` and `/v1/me` requires a token.
 
 ### Users and identities
 
@@ -322,6 +325,7 @@ Most tests call `app.fetch` in-process. `test/api` talks to a base URL over **re
 | `test/env.test.ts`, `test/env.examples.test.ts` | Config loading, safety guards, `env/*.example` drift |
 | `test/deps.test.ts`, `test/e2e.local.test.ts` | Dependency wiring and a full local lifecycle |
 | `test/api` | Black-box contract suite over real HTTP (local ephemeral server, or an opt-in remote one) |
+| `test/routes/health.test.ts` | Health check (200, 503, timeout) and `X-Request-Id` |
 | `test/lifecycle.test.ts` | Server startup (local setup, request logging, deployed mode) and graceful shutdown |
 | `test/routes/requestlog.test.ts` | Local request logging keeps the JSON 404/error handlers |
 | `test/errors.test.ts` | Error mapping (Postgres invalid-input codes to 422, generic 500) |
@@ -331,7 +335,7 @@ Most tests call `app.fetch` in-process. `test/api` talks to a base URL over **re
 
 [`openapi.yaml`](openapi.yaml) is generated from the Zod schemas and route declarations. Regenerate it with `npm run openapi` and commit the result; CI runs `npm run openapi:check` and fails if it is out of date.
 
-Operation ids: `listTrips`, `createTrip`, `getTrip`, `replaceTrip`, `renameTrip`, `deleteTrip`, `getMe`, `updateMe`, `deleteMe`, `getConfig`.
+Operation ids: `listTrips`, `createTrip`, `getTrip`, `replaceTrip`, `renameTrip`, `deleteTrip`, `getMe`, `updateMe`, `deleteMe`, `getConfig`, `getHealth`.
 
 Notes for client generation:
 
@@ -377,6 +381,8 @@ The last request, **Delete the account**, deletes the signed-in user and all the
 - **Text:** strings containing a NUL character or an unpaired UTF-16 surrogate are rejected with 422 (Postgres cannot store them).
 - **Limits:** 1 MB body (413) and at most 200 destinations (422).
 - **List:** `limit` defaults to 20 (max 100); `nextCursor` is an opaque string, `null` on the last page; a bad cursor is 400. Pagination never returns a duplicate, but a trip edited between page requests (for example from another device) moves to the front and can be missing from that traversal until the list is reloaded from page 1.
+- `GET /v1/health` is public and never cached (`Cache-Control: no-store`). It runs `select 1` against the database: `200 {"status":"ok"}`, or `503 {"status":"unavailable"}` if the database fails or does not answer within 3 s. The body carries no versions or error details; the reason goes to the function log. Point an uptime monitor at it (alert on anything but 200).
+- **Request ids:** every response carries `X-Request-Id` (a client-supplied one is kept, otherwise a UUID is generated). The log line of an unexpected 500 starts with `request <id>:`, so a client report can be matched to a Vercel log entry.
 - `GET /v1/config` is public, sends an `ETag` and `Cache-Control: no-cache`, and answers 304 to a matching `If-None-Match`.
 
 ## Project layout
