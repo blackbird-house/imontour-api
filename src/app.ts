@@ -8,9 +8,11 @@ import type { ResolveUser } from './auth/resolver.js'
 import type { VerifyToken } from './auth/verifier.js'
 import { errorHandler, notFound, payloadTooLarge } from './errors.js'
 import { validationHook } from './http/validation.js'
+import type { ExportRepo } from './repo/export.js'
 import type { TripRepo } from './repo/trips.js'
 import type { UserRepo } from './repo/users.js'
 import { configRoute, type RemoteConfigSource } from './routes/config.js'
+import { adminRoutes } from './routes/admin.js'
 import { healthRoute, type PingDatabase } from './routes/health.js'
 import { registerMeRoutes } from './routes/me.js'
 import { registerTripRoutes } from './routes/trips.js'
@@ -23,6 +25,9 @@ export type Deps = {
   identityAdmin: IdentityProviderAdmin
   remoteConfig: RemoteConfigSource
   pingDatabase: PingDatabase
+  exporter: ExportRepo
+  /** Mounts the operator-only /v1/admin routes when set. */
+  adminApiKey?: string
 }
 
 export const MAX_BODY_BYTES = 1024 * 1024
@@ -64,6 +69,7 @@ export function createApp(deps: Deps, opts: { requestLog?: boolean } = {}): Open
   // Public: bearerAuth above only covers /v1/trips/* and /v1/me.
   app.route('/v1', configRoute(deps.remoteConfig))
   app.route('/v1', healthRoute(deps.pingDatabase))
+  if (deps.adminApiKey) app.route('/v1/admin', adminRoutes(deps.exporter, deps.adminApiKey))
   registerTripRoutes(app, deps.repo)
   registerMeRoutes(app, deps.users, deps.identityAdmin)
 

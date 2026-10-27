@@ -5,6 +5,7 @@ import { createSupabaseIdentityAdmin } from './auth/supabaseAdmin.js'
 import { createVerifier } from './auth/verifier.js'
 import { createDb, type Db } from './db/client.js'
 import type { Config } from './env.js'
+import { createExportRepo } from './repo/export.js'
 import { createTripRepo } from './repo/trips.js'
 import { createUserRepo } from './repo/users.js'
 import { createFileConfigSource } from './routes/config.js'
@@ -24,6 +25,8 @@ export function buildDeps(config: Config, db: Db = createDb(config.databaseUrl))
       ? createSupabaseIdentityAdmin({ ...config.identityAdmin, issuer: config.auth.issuer })
       : createNoopIdentityAdmin(),
     remoteConfig: createFileConfigSource(config.configFile),
+    exporter: createExportRepo(db, config.dbSchema),
+    ...(config.adminApiKey ? { adminApiKey: config.adminApiKey } : {}),
     pingDatabase: async () => {
       await db`select 1`
     },

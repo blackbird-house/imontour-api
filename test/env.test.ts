@@ -39,6 +39,12 @@ describe('loadConfig', () => {
     expect(c.auth.audience).toBe('aud')
   })
 
+  it('enables the admin routes only with a long enough ADMIN_API_KEY', () => {
+    expect(loadConfig(base).adminApiKey).toBeUndefined()
+    expect(loadConfig({ ...base, ADMIN_API_KEY: 'a'.repeat(32) }).adminApiKey).toBe('a'.repeat(32))
+    expect(() => loadConfig({ ...base, ADMIN_API_KEY: 'short' })).toThrow(/ADMIN_API_KEY/)
+  })
+
   it('throws naming DATABASE_URL when missing', () => {
     expect(() => loadConfig({ ...base, DATABASE_URL: undefined })).toThrow(ConfigError)
     expect(() => loadConfig({ ...base, DATABASE_URL: undefined })).toThrow(/DATABASE_URL/)

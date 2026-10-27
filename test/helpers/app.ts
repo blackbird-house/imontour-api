@@ -3,6 +3,7 @@ import type { IdentityProviderAdmin } from '../../src/auth/providerAdmin.js'
 import { createUserResolver } from '../../src/auth/resolver.js'
 import { createVerifier } from '../../src/auth/verifier.js'
 import { createTripRepo } from '../../src/repo/trips.js'
+import { createExportRepo } from '../../src/repo/export.js'
 import { createUserRepo } from '../../src/repo/users.js'
 import { createTestSchema, stopTestDatabase } from './db.js'
 import { TEST_AUDIENCE, TEST_ISSUER, jwksFor, makeKeyPair, signToken } from './tokens.js'
@@ -13,6 +14,8 @@ export type TestRequestInit = RequestInit & {
   /** Serialized as the JSON body, with `Content-Type: application/json`. */
   json?: unknown
 }
+
+export const TEST_ADMIN_KEY = 'k'.repeat(40)
 
 export const stubRemoteConfig = async () => ({ body: {}, etag: '"stub"' })
 
@@ -28,6 +31,7 @@ export function stubDeps(over: Partial<Deps> = {}): Deps {
     identityAdmin: { deleteIdentity: unused },
     remoteConfig: stubRemoteConfig,
     pingDatabase: unused,
+    exporter: { findByEmail: unused },
     ...over,
   }
 }
@@ -57,6 +61,8 @@ export async function createTestApp() {
     pingDatabase: async () => {
       await db`select 1`
     },
+    exporter: createExportRepo(db, schema),
+    adminApiKey: TEST_ADMIN_KEY,
   }
   const app = createApp(deps)
 
