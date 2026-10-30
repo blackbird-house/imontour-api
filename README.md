@@ -7,6 +7,7 @@ TypeScript, Hono, Postgres. Runs locally as a Node server and in deployed enviro
 - Design: [docs/superpowers/specs/2026-10-20-imontour-api-design.md](docs/superpowers/specs/2026-10-20-imontour-api-design.md)
 - Plan: [docs/superpowers/plans/2026-10-20-imontour-api.md](docs/superpowers/plans/2026-10-20-imontour-api.md)
 - Backlog: [docs/backlog.md](docs/backlog.md), what is left after the first deployed version
+- iOS account requirements: [docs/ios-account-answers.md](docs/ios-account-answers.md), our answers to the app's request (what is done, what the owner must check)
 - Legal: [docs/legal](docs/legal/README.md), data inventory, privacy policy, terms, App Store privacy labels. Served at `/privacy` and `/terms` once finished (`npm run legal`)
 
 ## Quick start (local)
@@ -232,7 +233,7 @@ Bearer token -> verifier -> { issuer, subject, email? }
 - `PATCH /v1/me`: change `displayName` (max 100 characters) and/or `locale` (a BCP 47 tag such as `en-GB`). Absent fields are unchanged, `null` clears, at least one field is required (422 otherwise). `id` and `email` cannot be changed.
 - `DELETE /v1/me`: hard-deletes the user (and, with `X-Apple-Authorization-Code`, revokes the Sign in with Apple token); their trips and identities cascade (204). Required by Apple for apps with Sign in with Apple. Afterwards the identity provider is asked to delete the sign-in account through the `IdentityProviderAdmin` port (Supabase adapter when `AUTH_ADMIN_URL` and `AUTH_ADMIN_SERVICE_KEY` are set, no-op otherwise, including locally). Provider cleanup is best effort: a failure is logged and the request still answers 204. The Supabase adapter has not been exercised against a real project yet.
 
-A token that is still valid after deletion (it lives until `exp`) provisions a fresh, empty account on the next request. Clients should drop the session after a successful delete.
+A token that is still valid after deletion (it lives until `exp`) provisions a fresh, empty account on the next request, so `GET` and `PATCH /v1/me` do not answer 404 for it; 404 only appears in a race with a concurrent delete. Repeating `DELETE /v1/me` with such a token is 204 again (idempotent, never 404). Clients should drop the session after a successful delete.
 
 ### Swapping auth providers later
 

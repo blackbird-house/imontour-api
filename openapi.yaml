@@ -935,7 +935,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "404":
-          description: The user no longer exists.
+          description: "The user row disappeared between sign-in and this call (a race with a concurrent delete). A token that is still valid after the account was deleted does not get this: it starts a fresh, empty account instead."
           content:
             application/json:
               schema:
@@ -987,7 +987,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "404":
-          description: The user no longer exists.
+          description: "The user row disappeared between sign-in and this call (a race with a concurrent delete). A token that is still valid after the account was deleted does not get this: it starts a fresh, empty account instead."
           content:
             application/json:
               schema:
@@ -1029,7 +1029,7 @@ paths:
         - bearerAuth: []
       operationId: deleteMe
       summary: Delete the account
-      description: "Permanently deletes the user and all their trips, then asks the identity provider to delete the sign-in account. Provider cleanup is best effort: a failure is logged and does not fail the request. Not undoable. An app that signed the user in with Apple must send `X-Apple-Authorization-Code`, obtained by asking Apple for a fresh authorization at deletion time (a code is single-use and expires after about 5 minutes); the server uses it to revoke the user's Sign in with Apple token, as Apple requires. Revoking is also best effort."
+      description: "Permanently deletes the user and all their trips, then asks the identity provider to delete the sign-in account. Provider cleanup is best effort: a failure is logged and does not fail the request. Not undoable. An app that signed the user in with Apple must send `X-Apple-Authorization-Code`, obtained by asking Apple for a fresh authorization at deletion time (a code is single-use and expires after about 5 minutes); the server uses it to revoke the user's Sign in with Apple token, as Apple requires. Revoking is also best effort. Idempotent: repeating the call with a token that is still valid (for example after a lost answer) is again 204; there is no 404 here. Send the Apple code again on a retry, since the first one may have been used."
       parameters:
         - schema:
             type: string
