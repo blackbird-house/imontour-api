@@ -17,7 +17,10 @@ const errorResponse = (description: string) => ({
 const errors = {
   badRequest: errorResponse('Malformed JSON.'),
   unauthorized: errorResponse('Missing or invalid bearer token.'),
-  notFound: errorResponse('The user no longer exists.'),
+  notFound: errorResponse(
+    'The user row disappeared between sign-in and this call (a race with a concurrent delete). A token that is ' +
+      'still valid after the account was deleted does not get this: it starts a fresh, empty account instead.',
+  ),
   payloadTooLarge: errorResponse('Request body larger than 1 MB.'),
   unsupportedMediaType: errorResponse('Request body is not application/json.'),
   unprocessable: errorResponse('Body is valid JSON but violates the schema.'),
@@ -83,7 +86,9 @@ const deleteMe = createRoute({
     'account. Provider cleanup is best effort: a failure is logged and does not fail the request. Not undoable. ' +
     'An app that signed the user in with Apple must send `X-Apple-Authorization-Code`, obtained by asking Apple ' +
     'for a fresh authorization at deletion time (a code is single-use and expires after about 5 minutes); the ' +
-    "server uses it to revoke the user's Sign in with Apple token, as Apple requires. Revoking is also best effort.",
+    "server uses it to revoke the user's Sign in with Apple token, as Apple requires. Revoking is also best effort. " +
+    'Idempotent: repeating the call with a token that is still valid (for example after a lost answer) is ' +
+    'again 204; there is no 404 here. Send the Apple code again on a retry, since the first one may have been used.',
   request: {
     headers: z.object({
       'X-Apple-Authorization-Code': z

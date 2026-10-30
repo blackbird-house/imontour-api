@@ -296,6 +296,17 @@ describe('DELETE /v1/me', () => {
     await expectError(await t.request('/v1/me', { method: 'DELETE' }), 401, 'unauthorized')
   })
 
+  it('is idempotent: repeating the delete with a still-valid token is 204 again and leaves no account behind', async () => {
+    const subject = randomUUID()
+    await t.request('/v1/me', { as: subject })
+    expect((await t.request('/v1/me', { method: 'DELETE', as: subject })).status).toBe(204)
+    const before = await usersCount()
+    const again = await t.request('/v1/me', { method: 'DELETE', as: subject })
+    expect(again.status).toBe(204)
+    expect(await again.text()).toBe('')
+    expect(await usersCount()).toBe(before)
+  })
+
   it('a still-valid token after deletion starts a fresh, empty account', async () => {
     const subject = randomUUID()
     const old = await body(await t.request('/v1/me', { as: subject }))
