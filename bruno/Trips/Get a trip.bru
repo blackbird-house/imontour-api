@@ -1,0 +1,27 @@
+meta {
+  name: Get a trip
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/v1/trips/{{tripId}}
+  body: none
+  auth: inherit
+}
+
+headers {
+  Accept: application/json
+}
+
+script:post-response {
+  // Keeps {{tripId}} and {{etag}} up to date for the next request.
+  if (res.getStatus() < 300) {
+    bru.setVar("tripId", res.getBody().id);
+    bru.setVar("etag", res.getHeader("etag"));
+  }
+}
+
+docs {
+  Get a trip
+}

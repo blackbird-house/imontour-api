@@ -1,52 +1,23 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
-  COLLECTION_VARIABLES,
-  ENVIRONMENT_VARIABLES,
-  EXAMPLES,
-  buildCollection,
-  buildCollectionFiles,
-} from '../src/collection.js'
+  BRUNO_ENVIRONMENTS,
+  BRUNO_ENVIRONMENT_VARIABLES,
+  BRUNO_RUNTIME_VARIABLES,
+  BRUNO_SECRET_VARIABLES,
+  buildBrunoFiles,
+} from '../src/bruno.js'
+import { EXAMPLES } from '../src/collection.js'
 import { buildOpenApiDocument } from '../src/openapi.js'
 import { createTripBodySchema, renameSchema, tripInputSchema } from '../src/schemas/trip.js'
 import { updateUserSchema } from '../src/schemas/user.js'
 
-type Json = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
+const doc = buildOpenApiDocument() as Parameters<typeof buildBrunoFiles>[0]
 
-const doc = buildOpenApiDocument() as Parameters<typeof buildCollection>[0]
-const collection = buildCollection(doc) as Json
-const requests: { folder: string; item: Json }[] = collection.item.flatMap((f: Json) =>
-  f.item.map((item: Json) => ({ folder: f.name as string, item })),
-)
-
-describe('API client collection', () => {
-  it('has one request per OpenAPI operation, in folders named after the tags', () => {
+describe('request examples', () => {
+  it('has exactly one example per OpenAPI operation', () => {
     const operations = Object.values(doc.paths).flatMap((ops) => Object.values(ops))
-    expect(requests).toHaveLength(operations.length)
     expect(Object.keys(EXAMPLES).sort()).toEqual(operations.map((o) => o.operationId).sort())
-    expect(collection.item.map((f: Json) => f.name)).toEqual(['Config', 'Health', 'Trips', 'Me'])
-  })
-
-  it('points every request at a real path and method of the API', () => {
-    const known = new Set(
-      Object.entries(doc.paths).flatMap(([path, ops]) =>
-        Object.keys(ops).map((m) => `${m.toUpperCase()} ${path.replace('{id}', '{{tripId}}')}`),
-      ),
-    )
-    for (const { item } of requests) {
-      const url = item.request.url
-      expect(known.has(`${item.request.method} /${url.path.join('/')}`), item.name).toBe(true)
-      expect(url.raw.startsWith('{{baseUrl}}/')).toBe(true)
-    }
-  })
-
-  it('sends bearer auth by default and nothing on the public requests', () => {
-    expect(collection.auth).toEqual({ type: 'bearer', bearer: [{ key: 'token', value: '{{token}}', type: 'string' }] })
-    const isPublic = (folder: string) => folder === 'Config' || folder === 'Health'
-    for (const { folder, item } of requests) {
-      if (isPublic(folder)) expect(item.request.auth).toEqual({ type: 'noauth' })
-      else expect(item.request.auth).toBeUndefined()
-    }
   })
 
   it('example bodies are accepted by the real request schemas', () => {
@@ -56,40 +27,69 @@ describe('API client collection', () => {
     expect(updateUserSchema.safeParse(EXAMPLES.updateMe!.body).success).toBe(true)
   })
 
-  it('only uses variables that an environment or the collection defines', () => {
-    const defined = new Set<string>([...ENVIRONMENT_VARIABLES, ...COLLECTION_VARIABLES])
-    const used = new Set(
-      JSON.stringify(collection)
-        .match(/\{\{[^}]+\}\}/g)
-        ?.map((v) => v.slice(2, -2)),
-    )
-    for (const name of used) expect(defined.has(name), name).toBe(true)
-  })
-
-  it('keeps secrets out of the repo: the token is empty in every environment', () => {
-    const files = buildCollectionFiles(doc)
-    for (const [name, content] of Object.entries(files)) {
-      if (!name.endsWith('environment.json')) continue
-      const token = (JSON.parse(content) as Json).values.find((v: Json) => v.key === 'token')
-      expect(token).toMatchObject({ value: '', type: 'secret' })
-    }
-  })
-
-  it('keeps the token empty in the collection itself too, and defaults baseUrl to a public URL', () => {
-    const vars = Object.fromEntries((collection.variable as Json[]).map((v) => [v.key, v.value]))
-    expect(vars.token).toBe('')
-    expect(String(vars.baseUrl)).toMatch(/^https:\/\//)
-  })
-
   it('fails loudly for an operation that has no example yet', () => {
     const extended = structuredClone(doc)
     extended.paths['/v1/new'] = { get: { operationId: 'newThing', summary: 'New', tags: ['Trips'] } }
-    expect(() => buildCollection(extended)).toThrow(/No example for GET \/v1\/new/)
+    expect(() => buildBrunoFiles(extended)).toThrow(/No example for GET \/v1\/new/)
+  })
+})
+
+describe('Bruno collection', () => {
+  const files = buildBrunoFiles(doc)
+  const requestFiles = Object.entries(files).filter(
+    ([name]) => name.endsWith('.bru') && /^[A-Z][^/]*\//.test(name) && !name.endsWith('folder.bru'),
+  )
+
+  it('has one request per OpenAPI operation plus the operator export, in the same folders', () => {
+    const operations = Object.values(doc.paths).flatMap((ops) => Object.values(ops))
+    expect(requestFiles).toHaveLength(operations.length + 1)
+    const folders = Object.keys(files)
+      .filter((n) => n.endsWith('/folder.bru'))
+      .map((n) => n.split('/')[0])
+    expect(folders).toEqual(['Config', 'Health', 'Trips', 'Me', 'Admin'])
   })
 
-  it('matches the committed files in postman/ byte for byte', () => {
-    for (const [name, content] of Object.entries(buildCollectionFiles(doc))) {
-      expect(readFileSync(`postman/${name}`, 'utf8'), name).toBe(content)
+  it('sends the collection bearer token by default and nothing on the public requests', () => {
+    expect(files['collection.bru']).toContain('mode: bearer')
+    expect(files['collection.bru']).toContain('token: {{token}}')
+    for (const [name, content] of requestFiles) {
+      const isPublic = name.startsWith('Config/') || name.startsWith('Health/')
+      if (isPublic) expect(content, name).toContain('auth: none')
+      else if (name.startsWith('Admin/')) expect(content, name).toContain('token: {{adminApiKey}}')
+      else expect(content, name).toContain('auth: inherit')
+    }
+  })
+
+  it('only uses variables an environment defines or a request sets', () => {
+    const defined = new Set<string>([...BRUNO_ENVIRONMENT_VARIABLES, ...BRUNO_RUNTIME_VARIABLES])
+    for (const [name, content] of requestFiles) {
+      for (const v of content.match(/\{\{[^}]+\}\}/g) ?? []) {
+        expect(defined.has(v.slice(2, -2)), `${name} ${v}`).toBe(true)
+      }
+    }
+  })
+
+  it('defines the four environments and keeps secret values out of them', () => {
+    expect(Object.keys(BRUNO_ENVIRONMENTS)).toEqual(['local', 'dev', 'staging', 'prod'])
+    for (const name of Object.keys(BRUNO_ENVIRONMENTS)) {
+      const env = files[`environments/${name}.bru`]!
+      for (const secret of BRUNO_SECRET_VARIABLES) {
+        expect(env).toContain(`  ${secret}`)
+        expect(env).not.toMatch(new RegExp(`^\\s*${secret}:`, 'm'))
+      }
+    }
+  })
+
+  it('keeps tripId and etag in step with the trip responses', () => {
+    for (const [name, content] of requestFiles) {
+      const sets = content.includes('bru.setVar("tripId"')
+      expect(sets, name).toBe(/Create a trip|Get a trip|Replace a trip|Rename a trip/.test(name))
+    }
+  })
+
+  it('matches the committed files in bruno/ byte for byte', () => {
+    for (const [name, content] of Object.entries(files)) {
+      expect(readFileSync(`bruno/${name}`, 'utf8'), name).toBe(content)
     }
   })
 })

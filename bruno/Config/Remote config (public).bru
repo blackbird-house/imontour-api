@@ -1,0 +1,22 @@
+meta {
+  name: Remote config (public)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/v1/config
+  body: none
+  auth: none
+}
+
+headers {
+  ~If-None-Match: 
+  Accept: application/json
+}
+
+docs {
+  Remote config (public)
+
+  No authentication. Clients revalidate with `If-None-Match`.
+}

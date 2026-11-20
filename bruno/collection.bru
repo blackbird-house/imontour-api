@@ -1,0 +1,18 @@
+docs {
+  Generated from openapi.yaml by `npm run collection`; do not edit by hand (CI fails if it is out of date).
+
+  Pick an environment (local, dev, staging, prod), then set its secrets in Bruno (they are never stored in git):
+  - token: local server: run `npm run -s token` and paste the output. Deployed: the access_token of a Supabase test user.
+  - adminApiKey: only for the Admin folder (the operator key, ADMIN_API_KEY on that environment).
+  - appleAuthCode: optional, a fresh Sign in with Apple authorization code for "Delete the account".
+
+  tripId and etag are filled in by the trip requests themselves (run "Create a trip" first).
+}
+
+auth {
+  mode: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}

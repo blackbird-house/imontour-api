@@ -2,9 +2,9 @@ node_modules
 .local
 coverage
 openapi.yaml
-postman
 package-lock.json
 public
 docs
 README.md
 docker-compose.yml
+bruno

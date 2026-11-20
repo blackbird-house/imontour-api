@@ -1,0 +1,21 @@
+meta {
+  name: Get the signed-in user profile
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/v1/me
+  body: none
+  auth: inherit
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  Get the signed-in user profile
+
+  The user is created on the first authenticated request, so this never answers 404 for a fresh sign-in.
+}

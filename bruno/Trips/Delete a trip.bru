@@ -1,0 +1,19 @@
+meta {
+  name: Delete a trip
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{baseUrl}}/v1/trips/{{tripId}}
+  body: none
+  auth: inherit
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  Delete a trip
+}

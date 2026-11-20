@@ -188,7 +188,7 @@ Not verified against a real project yet: run `supabase:diff` first and check the
 
 ### Data export (operator only)
 
-For access/portability requests that arrive by email. Not part of `openapi.yaml`, the client collection or the app: only you call it, with a secret that is not a user token. It exists only when `ADMIN_API_KEY` is set on that environment.
+For access/portability requests that arrive by email. Not part of `openapi.yaml` or the app (the Bruno collection has it in its own **Admin** folder): only you call it, with a secret that is not a user token. It exists only when `ADMIN_API_KEY` is set on that environment.
 
 ```sh
 curl -s -X POST https://<api>/v1/admin/export \
@@ -380,19 +380,31 @@ Notes for client generation:
 
 ## API client collection
 
-[`postman/`](postman) holds a ready-made request collection (Postman Collection v2.1, which RapidAPI, Postman, Insomnia and Bruno all import) and two environments. It is **generated** from `openapi.yaml` by `npm run collection`; CI runs `npm run collection:check` and fails if it is out of date, so it cannot drift from the API. Do not edit the JSON by hand: change the example bodies in `src/collection.ts` and regenerate. Adding an endpoint without an example there fails the build.
+[`bruno/`](bruno) holds a ready-made request collection for [Bruno](https://www.usebruno.com) and its environments. It is **generated** from `openapi.yaml` by `npm run collection`; CI runs `npm run collection:check` and fails if it is out of date, so it cannot drift from the API. Do not edit the `.bru` files by hand: change the example bodies in `src/collection.ts` (or the generator in `src/bruno.ts`) and regenerate. Adding an endpoint without an example there fails the build.
 
-1. Import `postman/imontour-api.postman_collection.json`. It carries its own `baseUrl` (the deployed API) and an empty `token` variable, so it works on its own; clients that import the collection only (RapidAPI does) still get them. The environment files (`local`, `deployed`) are optional: import one to switch `baseUrl` between your machine and the deployed API (edit it if the API moves).
-2. Set the `token` variable. It is empty in the repo on purpose and must never be committed.
-   - **Local server:** `npm run -s token` prints one.
-   - **Deployed API:** sign in a Supabase test user (Authentication > Users, "Auto Confirm User" ticked) and use the `access_token` it returns. It lasts about an hour.
+In Bruno: **Open Collection**, choose the `bruno/` folder, then pick an environment.
 
-     ```sh
-     curl -s "https://<project-ref>.supabase.co/auth/v1/token?grant_type=password" \
-       -H "apikey: <anon or publishable key>" -H "Content-Type: application/json" \
-       -d '{"email":"<test-user-email>","password":"<password>"}'
-     ```
-3. Run **Create a trip** first. In Postman the requests fill `{{tripId}}` and `{{etag}}` themselves; in other clients copy the trip `id` and the `ETag` header by hand. **Replace a trip** needs the current ETag in `If-Match` (send it back exactly as received, weak or strong). Renaming does not use `If-Match`.
+| Environment | `baseUrl`                           | Notes                                                              |
+| ----------- | ----------------------------------- | ------------------------------------------------------------------ |
+| `local`     | `http://localhost:3000`             | token: `npm run -s token`                                          |
+| `dev`       | `https://imontour-api.vercel.app`   | the only deployed environment for now (single Vercel environment)  |
+| `staging`   | `https://imontour-staging.invalid`  | placeholder: set the real URL in `src/bruno.ts` once it exists     |
+| `prod`      | `https://imontour-prod.invalid`     | placeholder, same                                                  |
+
+Variables: `baseUrl` (per environment), the secrets `token`, `adminApiKey` (the **Admin** folder's operator export) and `appleAuthCode` (optional, for **Delete the account**), and `tripId` / `etag`, which the trip requests set themselves (run **Create a trip** first). Secret values are entered in Bruno per environment and are never written to the repo.
+
+Getting a `token`:
+
+- **Local server:** `npm run -s token` prints one.
+- **Deployed API:** sign in a Supabase test user (Authentication > Users, "Auto Confirm User" ticked) and use the `access_token` it returns. It lasts about an hour.
+
+  ```sh
+  curl -s "https://<project-ref>.supabase.co/auth/v1/token?grant_type=password" \
+    -H "apikey: <anon or publishable key>" -H "Content-Type: application/json" \
+    -d '{"email":"<test-user-email>","password":"<password>"}'
+  ```
+
+**Replace a trip** needs the current ETag in `If-Match` (send it back exactly as received, weak or strong); the trip requests fill `etag` for you. Renaming does not use `If-Match`.
 
 The last request, **Delete the account**, deletes the signed-in user and all their data; use a test user.
 
@@ -434,7 +446,7 @@ env/                  per-environment variable templates
 docker/, docker-compose.yml   local Postgres (development only)
 test/                 vitest suites
 openapi.yaml          generated API description
-postman/              generated API client collection and environments (npm run collection)
+bruno/                generated Bruno collection and environments (npm run collection)
 ```
 
 ## Git workflow

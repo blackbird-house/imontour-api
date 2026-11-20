@@ -1,0 +1,21 @@
+meta {
+  name: Health check (public)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/v1/health
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+}
+
+docs {
+  Health check (public)
+
+  No authentication. Runs a trivial query against the database, so it is meant for uptime monitors (and as a cheap smoke test), not for clients to call on every launch.
+}
