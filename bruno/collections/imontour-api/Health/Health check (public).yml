@@ -1,0 +1,20 @@
+info:
+  name: "Health check (public)"
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/v1/health"
+  headers:
+    - name: "Accept"
+      value: "application/json"
+  auth: none
+
+settings:
+  encodeUrl: true
+
+docs: |-
+  Health check (public)
+
+  No authentication. Runs a trivial query against the database, so it is meant for uptime monitors (and as a cheap smoke test), not for clients to call on every launch.

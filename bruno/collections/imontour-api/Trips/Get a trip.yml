@@ -1,0 +1,28 @@
+info:
+  name: "Get a trip"
+  type: http
+  seq: 3
+
+http:
+  method: GET
+  url: "{{baseUrl}}/v1/trips/{{tripId}}"
+  headers:
+    - name: "Accept"
+      value: "application/json"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // Keeps {{tripId}} and {{etag}} up to date for the next request.
+        if (res.getStatus() < 300) {
+          bru.setVar("tripId", res.getBody().id);
+          bru.setVar("etag", res.getHeader("etag"));
+        }
+
+settings:
+  encodeUrl: true
+
+docs: |-
+  Get a trip

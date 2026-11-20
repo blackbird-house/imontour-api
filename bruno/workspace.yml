@@ -1,0 +1,9 @@
+opencollection: 1.0.0
+
+info:
+  name: "Imontour"
+  type: workspace
+
+collections:
+  - name: "Imontour API"
+    path: "collections/imontour-api"

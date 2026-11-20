@@ -1,0 +1,29 @@
+info:
+  name: "Update the profile"
+  type: http
+  seq: 2
+
+http:
+  method: PATCH
+  url: "{{baseUrl}}/v1/me"
+  headers:
+    - name: "Content-Type"
+      value: "application/json"
+    - name: "Accept"
+      value: "application/json"
+  body:
+    type: json
+    data: |-
+      {
+        "displayName": "Test User",
+        "locale": "en-GB"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+
+docs: |-
+  Update the profile
+
+  Changes `displayName` and/or `locale`. Absent fields are unchanged; `null` clears a field.
