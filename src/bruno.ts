@@ -1,7 +1,7 @@
 /**
- * Builds the Bruno collection (bruno/, plain-text `.bru` files) from the OpenAPI document and EXAMPLES, so the
+ * Builds the Bruno collection (bruno/, OpenCollection YAML: `opencollection.yml` and `.yml` files) from the OpenAPI document and EXAMPLES, so the
  * requests cannot drift from the API.
- * Open the `bruno/` folder in Bruno ("Open Collection") and pick an environment (local, dev, staging, prod).
+ * Open the `bruno/` folder in Bruno as a workspace (it holds the collection) and pick an environment (local, dev, staging, prod).
  */
 import {
   DEPLOYED_BASE_URL,
@@ -17,7 +17,7 @@ import {
 export const BRUNO_ENVIRONMENT_VARIABLES = ['baseUrl', 'token', 'adminApiKey', 'appleAuthCode'] as const
 export const BRUNO_RUNTIME_VARIABLES = ['tripId', 'etag'] as const
 
-/** Secret variables: Bruno keeps their values in the app (never in the .bru file, so never in git). */
+/** Secret variables: Bruno keeps their values in the app (never in the environment file, so never in git). */
 export const BRUNO_SECRET_VARIABLES = ['token', 'adminApiKey', 'appleAuthCode'] as const
 
 /** The environments the API has (README, "Environments"). staging and prod have no deployed URL yet. */
@@ -46,22 +46,28 @@ const SET_TRIP_VARS = [
   '  bru.setVar("tripId", res.getBody().id);',
   '  bru.setVar("etag", res.getHeader("etag"));',
   '}',
-]
+].join('\n')
 
-const indent = (text: string, spaces = 2) =>
+/** A YAML scalar: JSON strings are valid double-quoted YAML, so quoting is always safe. */
+const str = (value: string) => JSON.stringify(value)
+
+/** A multi-line text as a literal block (`|-`) whose lines sit `spaces` deeper than the key. */
+const lines = (text: string, spaces: number) =>
   text
     .split('\n')
     .map((line) => (line === '' ? '' : ' '.repeat(spaces) + line))
     .join('\n')
 
-const block = (name: string, lines: string[]) => `${name} {\n${lines.map((l) => indent(l)).join('\n')}\n}\n`
+const block = (key: string, text: string, spaces: number) => `${key}: |-\n${lines(text, spaces + 2)}`
 
 function fileName(title: string): string {
   return `${title
     .replace(/[^A-Za-z0-9 ()-]/g, '')
     .replace(/\s+/g, ' ')
-    .trim()}.bru`
+    .trim()}.yml`
 }
+
+type Entry = { key: string; value: string; disabled?: true }
 
 type BruRequest = {
   name: string
@@ -70,41 +76,45 @@ type BruRequest = {
   url: string
   auth: 'inherit' | 'none' | 'bearer'
   bearerVar?: string
-  query?: { key: string; value: string; disabled?: true }[]
-  headers: { key: string; value: string; disabled?: true }[]
+  query?: Entry[]
+  headers: Entry[]
   body?: unknown
-  script?: string[]
+  script?: string
   docs?: string
 }
 
 function renderRequest(r: BruRequest): string {
-  const parts: string[] = [
-    block('meta', [`name: ${r.name}`, 'type: http', `seq: ${r.seq}`]),
-    block(r.method.toLowerCase(), [
-      `url: ${r.url}`,
-      `body: ${r.body === undefined ? 'none' : 'json'}`,
-      `auth: ${r.auth}`,
-    ]),
-  ]
+  const http = [`  method: ${r.method.toUpperCase()}`, `  url: ${str(r.url)}`]
   if (r.query?.length) {
+    http.push('  params:')
+    for (const q of r.query) {
+      http.push(`    - name: ${str(q.key)}`, `      value: ${str(q.value)}`, '      type: query')
+      if (q.disabled) http.push('      disabled: true')
+    }
+  }
+  http.push('  headers:')
+  for (const h of r.headers) {
+    http.push(`    - name: ${str(h.key)}`, `      value: ${str(h.value)}`)
+    if (h.disabled) http.push('      disabled: true')
+  }
+  if (r.body !== undefined) {
+    http.push('  body:', '    type: json', `    ${block('data', JSON.stringify(r.body, null, 2), 4)}`)
+  }
+  if (r.auth === 'bearer') http.push('  auth:', '    type: bearer', `    token: ${str(`{{${r.bearerVar}}}`)}`)
+  else http.push(`  auth: ${r.auth}`)
+
+  const parts = [
+    ['info:', `  name: ${str(r.name)}`, '  type: http', `  seq: ${r.seq}`].join('\n'),
+    ['http:', ...http].join('\n'),
+  ]
+  if (r.script) {
     parts.push(
-      block(
-        'params:query',
-        r.query.map((q) => `${q.disabled ? '~' : ''}${q.key}: ${q.value}`),
-      ),
+      ['runtime:', '  scripts:', '    - type: after-response', `      ${block('code', r.script, 6)}`].join('\n'),
     )
   }
-  parts.push(
-    block(
-      'headers',
-      r.headers.map((h) => `${h.disabled ? '~' : ''}${h.key}: ${h.value}`),
-    ),
-  )
-  if (r.auth === 'bearer') parts.push(block('auth:bearer', [`token: {{${r.bearerVar}}}`]))
-  if (r.body !== undefined) parts.push(block('body:json', JSON.stringify(r.body, null, 2).split('\n')))
-  if (r.script) parts.push(block('script:post-response', r.script))
-  if (r.docs) parts.push(block('docs', r.docs.split('\n')))
-  return parts.join('\n')
+  parts.push('settings:\n  encodeUrl: true')
+  if (r.docs) parts.push(block('docs', r.docs, 0))
+  return `${parts.join('\n\n')}\n`
 }
 
 function fromOperation(path: string, method: string, op: Operation, example: Example, seq: number): BruRequest {
@@ -116,7 +126,7 @@ function fromOperation(path: string, method: string, op: Operation, example: Exa
   const enabled = (query ?? []).filter((q) => !q.disabled)
   const queryString = enabled.length > 0 ? `?${enabled.map((q) => `${q.key}=${q.value}`).join('&')}` : ''
   const isPublic = Array.isArray(op.security) && op.security.length === 0
-  const headers = [...(example.headers ?? [])].map((h) => ({
+  const headers: Entry[] = [...(example.headers ?? [])].map((h) => ({
     key: h.key,
     // The Apple authorization code is a secret variable, not a blank value.
     value: h.key === 'X-Apple-Authorization-Code' ? '{{appleAuthCode}}' : h.value,
@@ -138,36 +148,56 @@ function fromOperation(path: string, method: string, op: Operation, example: Exa
   }
 }
 
-function environmentFile(baseUrl: string): string {
+const VARIABLE_DESCRIPTIONS: Record<(typeof BRUNO_SECRET_VARIABLES)[number], string> = {
+  token: 'Access token of a test user (local: npm run -s token). Sent as the bearer token.',
+  adminApiKey: 'Operator key (ADMIN_API_KEY on that environment). Only for the Admin folder.',
+  appleAuthCode: 'Optional fresh Sign in with Apple authorization code for "Delete the account".',
+}
+
+function environmentFile(name: string, baseUrl: string): string {
   return [
-    block('vars', [`baseUrl: ${baseUrl}`]),
-    `vars:secret [\n${BRUNO_SECRET_VARIABLES.map((v) => `  ${v}`).join(',\n')}\n]\n`,
+    `name: ${name}`,
+    'variables:',
+    '  - name: baseUrl',
+    `    value: ${str(baseUrl)}`,
+    ...BRUNO_SECRET_VARIABLES.flatMap((v) => [
+      '  - secret: true',
+      `    name: ${v}`,
+      `    description: ${str(VARIABLE_DESCRIPTIONS[v])}`,
+    ]),
   ].join('\n')
 }
 
-const COLLECTION_FILE = [
-  block('docs', [
-    'Generated from openapi.yaml by `npm run collection`; do not edit by hand (CI fails if it is out of date).',
-    '',
-    'Pick an environment (local, dev, staging, prod), then set its secrets in Bruno (they are never stored in git):',
-    '- token: local server: run `npm run -s token` and paste the output. Deployed: the access_token of a Supabase test user.',
-    '- adminApiKey: only for the Admin folder (the operator key, ADMIN_API_KEY on that environment).',
-    '- appleAuthCode: optional, a fresh Sign in with Apple authorization code for "Delete the account".',
-    '',
-    'tripId and etag are filled in by the trip requests themselves (run "Create a trip" first).',
-  ]),
-  block('auth', ['mode: bearer']),
-  block('auth:bearer', ['token: {{token}}']),
+const COLLECTION_DOCS = [
+  'Generated from openapi.yaml by `npm run collection`; do not edit by hand (CI fails if it is out of date).',
+  '',
+  'Pick an environment (local, dev, staging, prod), then set its secrets in Bruno (they are never stored in git):',
+  '- token: local server: run `npm run -s token` and paste the output. Deployed: the access_token of a Supabase test user.',
+  '- adminApiKey: only for the Admin folder (the operator key, ADMIN_API_KEY on that environment).',
+  '- appleAuthCode: optional, a fresh Sign in with Apple authorization code for "Delete the account".',
+  '',
+  'tripId and etag are filled in by the trip requests themselves (run "Create a trip" first).',
 ].join('\n')
 
-/** Every file the generator owns, by path relative to the bruno/ folder. */
-export function buildBrunoFiles(doc: OpenApiDocument): Record<string, string> {
-  const files: Record<string, string> = {
-    'bruno.json': `${JSON.stringify({ version: '1', name: doc.info.title, type: 'collection', ignore: ['node_modules', '.git'] }, null, 2)}\n`,
-    'collection.bru': COLLECTION_FILE,
+function collectionFile(title: string): string {
+  return [
+    'opencollection: 1.0.0',
+    ['info:', `  name: ${str(title)}`].join('\n'),
+    ['request:', '  auth:', '    type: bearer', `    token: ${str('{{token}}')}`].join('\n'),
+    block('docs', COLLECTION_DOCS, 0),
+    ['extensions:', '  bruno:', '    ignore:', '      - node_modules', '      - .git'].join('\n'),
+  ].join('\n\n')
+}
+
+/** Where the collection lives inside the workspace (bruno/). */
+export const COLLECTION_DIR = 'collections/imontour-api'
+
+/** Every file of the collection, by path relative to the collection folder. */
+export function buildBrunoCollectionFiles(doc: OpenApiDocument): Record<string, string> {
+  const files: Record<string, string> = { 'opencollection.yml': `${collectionFile(doc.info.title)}\n` }
+  for (const [name, baseUrl] of Object.entries(BRUNO_ENVIRONMENTS)) {
+    files[`environments/${name}.yml`] = `${environmentFile(name, baseUrl)}\n`
   }
-  for (const [name, baseUrl] of Object.entries(BRUNO_ENVIRONMENTS))
-    files[`environments/${name}.bru`] = environmentFile(baseUrl)
 
   const folders = new Map<string, BruRequest[]>()
   const seen = new Set<string>()
@@ -211,8 +241,26 @@ export function buildBrunoFiles(doc: OpenApiDocument): Record<string, string> {
 
   let folderSeq = 0
   for (const [folder, requests] of folders) {
-    files[`${folder}/folder.bru`] = block('meta', [`name: ${folder}`, `seq: ${++folderSeq}`])
+    files[`${folder}/folder.yml`] = `info:\n  name: ${str(folder)}\n  type: folder\n  seq: ${++folderSeq}\n`
     for (const r of requests) files[`${folder}/${fileName(r.name)}`] = renderRequest(r)
+  }
+  return files
+}
+
+/** The workspace file: open the bruno/ folder as a workspace in Bruno and the collection is already in it. */
+function workspaceFile(title: string): string {
+  return [
+    'opencollection: 1.0.0',
+    ['info:', '  name: "Imontour"', '  type: workspace'].join('\n'),
+    ['collections:', `  - name: ${str(title)}`, `    path: ${str(COLLECTION_DIR)}`].join('\n'),
+  ].join('\n\n')
+}
+
+/** Every file the generator owns, by path relative to the bruno/ folder (the workspace). */
+export function buildBrunoFiles(doc: OpenApiDocument): Record<string, string> {
+  const files: Record<string, string> = { 'workspace.yml': `${workspaceFile(doc.info.title)}\n` }
+  for (const [name, content] of Object.entries(buildBrunoCollectionFiles(doc))) {
+    files[`${COLLECTION_DIR}/${name}`] = content
   }
   return files
 }

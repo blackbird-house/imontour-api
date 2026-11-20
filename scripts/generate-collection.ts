@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, rmdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildBrunoFiles } from '../src/bruno.js'
@@ -12,14 +12,14 @@ const targets = [
   { name: 'bruno/', dir: fileURLToPath(new URL('../bruno/', import.meta.url)), files: buildBrunoFiles(doc) },
 ]
 
-/** Generated files on disk (.bru / .json), relative to dir. Dotfiles (Bruno's local .env) are not ours. */
+/** Generated files on disk (.yml, plus any old .bru / .json), relative to dir. Dotfiles (Bruno's local .env) are not ours. */
 function existing(dir: string, rel = ''): string[] {
   if (!existsSync(dir + rel)) return []
   return readdirSync(dir + rel, { withFileTypes: true }).flatMap((e) => {
     if (e.name.startsWith('.')) return []
     const path = rel + e.name
     if (e.isDirectory()) return existing(dir, `${path}/`)
-    return /\.(bru|json)$/.test(e.name) ? [path] : []
+    return /\.(bru|json|yml)$/.test(e.name) ? [path] : []
   })
 }
 
@@ -38,7 +38,14 @@ for (const { name, dir, files } of targets) {
       failed = true
     } else console.log(`${name} is up to date`)
   } else {
-    for (const file of extra) rmSync(dir + file)
+    for (const file of extra) {
+      rmSync(dir + file)
+      // Drop the folders the removed files leave empty (e.g. the old flat layout).
+      for (let parent = dirname(file); parent !== '.'; parent = dirname(parent)) {
+        if (readdirSync(dir + parent).length > 0) break
+        rmdirSync(dir + parent)
+      }
+    }
     for (const [file, content] of Object.entries(files)) {
       mkdirSync(dirname(dir + file), { recursive: true })
       writeFileSync(dir + file, content)

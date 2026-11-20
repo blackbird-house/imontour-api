@@ -1,4 +1,14 @@
-docs {
+opencollection: 1.0.0
+
+info:
+  name: "Imontour API"
+
+request:
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+docs: |-
   Generated from openapi.yaml by `npm run collection`; do not edit by hand (CI fails if it is out of date).
 
   Pick an environment (local, dev, staging, prod), then set its secrets in Bruno (they are never stored in git):
@@ -7,12 +17,9 @@ docs {
   - appleAuthCode: optional, a fresh Sign in with Apple authorization code for "Delete the account".
 
   tripId and etag are filled in by the trip requests themselves (run "Create a trip" first).
-}
 
-auth {
-  mode: bearer
-}
-
-auth:bearer {
-  token: {{token}}
-}
+extensions:
+  bruno:
+    ignore:
+      - node_modules
+      - .git

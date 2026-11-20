@@ -1,0 +1,18 @@
+info:
+  name: "Delete a trip"
+  type: http
+  seq: 6
+
+http:
+  method: DELETE
+  url: "{{baseUrl}}/v1/trips/{{tripId}}"
+  headers:
+    - name: "Accept"
+      value: "application/json"
+  auth: inherit
+
+settings:
+  encodeUrl: true
+
+docs: |-
+  Delete a trip

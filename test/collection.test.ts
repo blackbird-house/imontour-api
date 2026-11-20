@@ -5,6 +5,8 @@ import {
   BRUNO_ENVIRONMENT_VARIABLES,
   BRUNO_RUNTIME_VARIABLES,
   BRUNO_SECRET_VARIABLES,
+  COLLECTION_DIR,
+  buildBrunoCollectionFiles,
   buildBrunoFiles,
 } from '../src/bruno.js'
 import { EXAMPLES } from '../src/collection.js'
@@ -35,27 +37,27 @@ describe('request examples', () => {
 })
 
 describe('Bruno collection', () => {
-  const files = buildBrunoFiles(doc)
+  const files = buildBrunoCollectionFiles(doc)
   const requestFiles = Object.entries(files).filter(
-    ([name]) => name.endsWith('.bru') && /^[A-Z][^/]*\//.test(name) && !name.endsWith('folder.bru'),
+    ([name]) => name.endsWith('.yml') && /^[A-Z][^/]*\//.test(name) && !name.endsWith('folder.yml'),
   )
 
   it('has one request per OpenAPI operation plus the operator export, in the same folders', () => {
     const operations = Object.values(doc.paths).flatMap((ops) => Object.values(ops))
     expect(requestFiles).toHaveLength(operations.length + 1)
     const folders = Object.keys(files)
-      .filter((n) => n.endsWith('/folder.bru'))
+      .filter((n) => n.endsWith('/folder.yml'))
       .map((n) => n.split('/')[0])
     expect(folders).toEqual(['Config', 'Health', 'Trips', 'Me', 'Admin'])
   })
 
   it('sends the collection bearer token by default and nothing on the public requests', () => {
-    expect(files['collection.bru']).toContain('mode: bearer')
-    expect(files['collection.bru']).toContain('token: {{token}}')
+    expect(files['opencollection.yml']).toContain('type: bearer')
+    expect(files['opencollection.yml']).toContain('token: "{{token}}"')
     for (const [name, content] of requestFiles) {
       const isPublic = name.startsWith('Config/') || name.startsWith('Health/')
       if (isPublic) expect(content, name).toContain('auth: none')
-      else if (name.startsWith('Admin/')) expect(content, name).toContain('token: {{adminApiKey}}')
+      else if (name.startsWith('Admin/')) expect(content, name).toContain('token: "{{adminApiKey}}"')
       else expect(content, name).toContain('auth: inherit')
     }
   })
@@ -72,10 +74,10 @@ describe('Bruno collection', () => {
   it('defines the four environments and keeps secret values out of them', () => {
     expect(Object.keys(BRUNO_ENVIRONMENTS)).toEqual(['local', 'dev', 'staging', 'prod'])
     for (const name of Object.keys(BRUNO_ENVIRONMENTS)) {
-      const env = files[`environments/${name}.bru`]!
+      const env = files[`environments/${name}.yml`]!
       for (const secret of BRUNO_SECRET_VARIABLES) {
-        expect(env).toContain(`  ${secret}`)
-        expect(env).not.toMatch(new RegExp(`^\\s*${secret}:`, 'm'))
+        expect(env).toContain(`  - secret: true\n    name: ${secret}\n`)
+        expect(env).not.toMatch(new RegExp(`name: ${secret}\\n\\s+value:`))
       }
     }
   })
@@ -87,9 +89,15 @@ describe('Bruno collection', () => {
     }
   })
 
-  it('matches the committed files in bruno/ byte for byte', () => {
-    for (const [name, content] of Object.entries(files)) {
+  it('matches the committed files in bruno/ byte for byte, with nothing else left behind', () => {
+    for (const [name, content] of Object.entries(buildBrunoFiles(doc))) {
       expect(readFileSync(`bruno/${name}`, 'utf8'), name).toBe(content)
     }
+  })
+
+  it('lists the collection in the workspace file', () => {
+    const workspace = buildBrunoFiles(doc)['workspace.yml']!
+    expect(workspace).toContain('type: workspace')
+    expect(workspace).toContain(`path: "${COLLECTION_DIR}"`)
   })
 })
