@@ -1,0 +1,13 @@
+name: local
+variables:
+  - name: baseUrl
+    value: "http://localhost:3000"
+  - secret: true
+    name: token
+    description: "Access token of a test user (local: npm run -s token). Sent as the bearer token."
+  - secret: true
+    name: adminApiKey
+    description: "Operator key (ADMIN_API_KEY on that environment). Only for the Admin folder."
+  - secret: true
+    name: appleAuthCode
+    description: "Optional fresh Sign in with Apple authorization code for \"Delete the account\"."

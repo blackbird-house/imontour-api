@@ -1,0 +1,20 @@
+info:
+  name: "Get the signed-in user profile"
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/v1/me"
+  headers:
+    - name: "Accept"
+      value: "application/json"
+  auth: inherit
+
+settings:
+  encodeUrl: true
+
+docs: |-
+  Get the signed-in user profile
+
+  The user is created on the first authenticated request, so this never answers 404 for a fresh sign-in.

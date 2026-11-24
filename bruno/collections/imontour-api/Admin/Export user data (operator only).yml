@@ -1,0 +1,32 @@
+info:
+  name: "Export user data (operator only)"
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{baseUrl}}/v1/admin/export"
+  headers:
+    - name: "Content-Type"
+      value: "application/json"
+    - name: "Accept"
+      value: "application/json"
+  body:
+    type: json
+    data: |-
+      {
+        "email": "person@example.com"
+      }
+  auth:
+    type: bearer
+    token: "{{adminApiKey}}"
+
+settings:
+  encodeUrl: true
+
+docs: |-
+  Answers an access/portability request by email. Only exists where ADMIN_API_KEY is set on the environment (otherwise 404).
+
+  Authenticates with the operator key in the `adminApiKey` environment secret, not a user token.
+
+  Verify the requester before replying, and send the file through a secure channel.

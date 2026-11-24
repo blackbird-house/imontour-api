@@ -1,0 +1,75 @@
+info:
+  name: "Create a trip (empty or full)"
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{baseUrl}}/v1/trips"
+  headers:
+    - name: "Content-Type"
+      value: "application/json"
+    - name: "Accept"
+      value: "application/json"
+  body:
+    type: json
+    data: |-
+      {
+        "schemaVersion": 1,
+        "name": "Japan and Portugal",
+        "destinations": [
+          {
+            "id": "3f1c2b8e-6a47-4d0e-9f5b-1c2d3e4f5a61",
+            "rawInput": "tokyo 5 days",
+            "color": "coral",
+            "place": {
+              "displayName": "Tokyo",
+              "type": "city",
+              "latitude": 35.68,
+              "longitude": 139.69,
+              "countryCode": "JP"
+            },
+            "timing": {
+              "mode": "explicitDates",
+              "startDay": "2027-04-01",
+              "endDay": "2027-04-05",
+              "durationDays": 5,
+              "isPlaceholder": false
+            }
+          },
+          {
+            "id": "7a9d4c10-2b3e-4f65-8a71-9b0c1d2e3f42",
+            "rawInput": "lisbon 4 days",
+            "color": "teal",
+            "place": {
+              "displayName": "Lisbon",
+              "type": "city",
+              "latitude": 38.72,
+              "longitude": -9.14,
+              "countryCode": "PT"
+            },
+            "timing": {
+              "mode": "durationOnly",
+              "durationDays": 4,
+              "isPlaceholder": false
+            }
+          }
+        ]
+      }
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // Keeps {{tripId}} and {{etag}} up to date for the next request.
+        if (res.getStatus() < 300) {
+          bru.setVar("tripId", res.getBody().id);
+          bru.setVar("etag", res.getHeader("etag"));
+        }
+
+settings:
+  encodeUrl: true
+
+docs: |-
+  Create a trip (empty or full)
