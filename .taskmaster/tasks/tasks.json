@@ -1,0 +1,187 @@
+{
+  "chat": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Decide the open chat questions and answer the app team",
+        "description": "Resolve section 11 of the app's chat API proposal, write the answers down, and tell the app team what changes from the proposal.",
+        "details": "Layer: docs only. Source: docs/features/chat-api-proposal.md in blackbird-house/imontour (branch chore/chat-api-proposal; the app pins our openapi.yaml in its task chat/3, so our answers must land first). Write docs/chat/decisions.md (and a short reply for the app team in the style of docs/ios-account-answers.md) recording one decision per question, each with the reason and the rejected option:\n(1) Live-event transport. Vercel functions cannot hold a WebSocket and cap a streaming response, so the realistic options are Supabase Realtime (the identity vendor already; the API writes events, the app subscribes) or SSE on a long-lived host. State how long events can be replayed (proposal: at least 24 h or 1,000 events). The choice decides task 11.\n(2) Moderation and legal duties for hosted photos and videos: who scans, who reviews reports, how fast, who is the published contact (App Review Guideline 1.2). This blocks release, not local work.\n(3) Retention of messages and media, and what account deletion does to messages other people still hold. A GDPR decision, including export.\n(4) Handle rules: length, characters, case-insensitive, reserved and banned words, changeable or not, how often.\n(5) Request limits: how many messages a stranger may send before acceptance (N), and what whoCanMessage 'nobody_new' does.\n(6) Reactions shape: full person-id lists or counts plus mine.\n(7) Unsend: removal event or tombstone.\n(8) Media limits: content types, byte caps, video duration (the app sends 60 s at about 1080p), who generates thumbnails.\n(9) Snapshot cap (proposed 256 KB) and accepted trip schemaVersions (today only 1).\n(10) Conversation create-or-get when two people start one at the same moment.\n(11) Mute and notificationPreviews names in v1.\nAlso reconcile the proposal's device endpoints (PUT/DELETE /v1/devices/{deviceId}) with the push requirements already sent (PUT/DELETE /v1/me/devices/{installId}, ADR-0025 in the app): one device registry, not two. Ask the user for every decision that is theirs; do not invent product rules.",
+        "testStrategy": "Docs only. Every numbered question has a written answer; links resolve; the app team's reply lists each place the API differs from the proposal.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 2,
+        "title": "Migration: chat tables, indexes and RLS",
+        "description": "The Postgres schema for chat profiles, conversations, messages, reactions, blocks, reports and media.",
+        "details": "Layer: db/migrations (next number after 003; forward-only, so write the rollback note in the file header per backlog item 16). Tables, all under the configured DB_SCHEMA like trips and users:\n- chat_profiles(user_id PK -> users, handle citext UNIQUE NULL, settings jsonb or columns read_receipts/who_can_message, created_at, updated_at). Handle uniqueness is case-insensitive.\n- conversations(id uuid PK client-chosen, user_a, user_b NULL for self-chat, status per participant, last_sequence int, created_at, updated_at) with a unique pair constraint on the ordered pair (least/greatest of the two ids) so two simultaneous creates cannot make two conversations; self-chat unique per user.\n- conversation_members(conversation_id, user_id, status 'accepted'|'request', read_position, blocked_at) so read positions and request state are per person.\n- messages(id uuid PK client-chosen, conversation_id, sender_id, sequence int, content jsonb, content_kind, sent_at, removed_at, UNIQUE(conversation_id, sequence)). The sequence is assigned inside the insert transaction from conversations.last_sequence (UPDATE ... RETURNING, row-locked) so it is gap-free; never from max()+1.\n- reactions(message_id, user_id, emoji, PK(message_id, user_id)).\n- blocks(blocker_id, blocked_id, created_at, PK both).\n- reports(id, reporter_id, target_type, conversation_id, message_id, person_id, reason, note, evidence jsonb, status, created_at) where evidence is a copy of the reported content so unsend cannot erase it.\n- chat_media(id, owner_id, kind, content_type, bytes, width, height, duration_seconds, storage_key, thumbnail_key, placeholder, status 'pending'|'ready'|'removed', message_id NULL, expires_at, created_at).\n- chat_events (see task 11) may get its own migration.\nIndexes: messages(conversation_id, sequence DESC) for history paging; conversation_members(user_id, updated_at DESC) for the inbox; chat_media(status, expires_at) for cleanup. Enable RLS on every new table the way 003 does. Update the pglite test schema helper and the data inventory in docs/legal if it lists tables.",
+        "testStrategy": "Repo tests against pglite (test/db): the migration applies on an empty schema and on top of 001-003; the pair constraint rejects a second conversation for the same two people in either order; UNIQUE(conversation_id, sequence) holds; two concurrent inserts into one conversation get sequences n and n+1 with no gap; handle uniqueness is case-insensitive; RLS is enabled on every new table (extend the existing RLS test).",
+        "priority": "high",
+        "dependencies": [1],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "People and handles: chat profile, availability, lookup",
+        "description": "GET/PATCH /v1/chat/me, GET /v1/chat/handles/{handle}, GET /v1/chat/availability and POST /v1/chat/people:lookup.",
+        "details": "Layer: src/schemas/chat.ts (zod, shared Person/Settings/Error shapes), src/repo/chatProfiles.ts, src/routes/chat.ts (or one file per area under src/routes/chat/) mounted in src/app.ts behind the same auth middleware as /v1/me. Follow the trips route conventions: zod-openapi createRoute, the {error:{code,message}} envelope via src/errors.ts, cursor helpers in src/http/cursor.ts.\n- GET /v1/chat/me returns { id, handle|null, displayName, avatarUrl|null, settings } and creates the chat profile row lazily with defaults (readReceipts true, whoCanMessage 'anyone'). displayName and avatarUrl come from the existing user profile.\n- PATCH /v1/chat/me sets handle and/or settings. 409 handle_taken (also on a unique-constraint race), 422 handle_invalid with a message naming the rule broken. Handle rules come from task 1.\n- GET /v1/chat/handles/{handle}: exact, case-insensitive; 200 {id, handle, displayName, avatarUrl} or 404. No search, no prefix, no suggestions. A person who blocked the caller answers 404 exactly like a missing one (task 9 wires the check; leave the hook here).\n- GET /v1/chat/availability?handle=: { available, reason?: 'taken'|'invalid'|'reserved' }.\n- POST /v1/chat/people:lookup: { ids: [..] } max 50 uuids, returns items for ids that exist and are not blockers of the caller; unknown ids are omitted, not errors.\nAll four need per-caller rate limiting hooks (task 12). Unknown enum values in settings are rejected on write only.",
+        "testStrategy": "Route tests with the fake repo plus repo tests on pglite: first GET creates defaults; handle_taken on a different case of an existing handle; each invalid-handle rule gives its own message; lookup is exact (a prefix returns 404); lookup of 51 ids is 400; unknown ids are omitted; unauthenticated is 401; token-check outage is 503.",
+        "priority": "high",
+        "dependencies": [2],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "Conversations: create-or-get, list, get, accept, decline, read",
+        "description": "The conversation endpoints, request handling and read positions.",
+        "details": "Layer: src/repo/chatConversations.ts, src/routes/chat (conversations).\n- PUT /v1/chat/conversations/{id}: body { otherPersonId: string|null } (null = self). Idempotent on the client id: the same id and same body returns 200 with the existing conversation; same id with a different body is 409. A different id for a pair that already has a conversation is 409 conversation_exists with the existing conversation in the body (the answer to proposal question 10 comes from task 1). Never creates a conversation with someone who blocked the caller, and does not reveal it (behave as task 9 decides).\n- GET /v1/chat/conversations?limit&cursor: most recent activity first, includes status 'request' ones, excludes ones the caller blocked. Each item has other (Person|null), status, lastMessage, unreadCount, readPosition, otherReadPosition (null if the other turned receipts off, or self-chat), updatedAt, blockedByMe. unreadCount excludes requests from the app's total (the app sums only accepted).\n- GET /v1/chat/conversations/{id}: 404 for a non-participant, same as missing.\n- POST .../accept and .../decline: only for a conversation in 'request' status for the caller; decline does not tell the sender.\n- PUT .../read { upTo }: sets the caller's read position, never backwards, never beyond last_sequence (422 or clamp: decide and document), returns the conversation. Emits read_changed (task 11).\nRequest creation rule (used by task 5): the first message from a person with no accepted conversation creates it as a request for the recipient; the sender sees an ordinary conversation. whoCanMessage 'nobody_new' makes that first message 403 not_accepting_messages.",
+        "testStrategy": "Repo and route tests: create is idempotent; different id for same pair returns conversation_exists with the existing one; two concurrent creates leave exactly one row; self-chat is unique per user; list order and cursor paging stay stable when activity changes between pages; request status appears for the recipient only; accept/decline authorization; read position never moves backwards; a non-participant gets 404 on every call.",
+        "priority": "high",
+        "dependencies": [2, 3],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "Messages: send (idempotent), history, server-ordered sequence",
+        "description": "PUT a message with a client id, return the stored message with its gap-free sequence, and page history newest first.",
+        "details": "Layer: src/repo/chatMessages.ts, src/routes/chat (messages), src/schemas/chat.ts (Content union).\n- PUT /v1/chat/conversations/{id}/messages/{messageId}: body { content }. Content: text (max 4,000 characters, 422 text_too_long), image/video (mediaId, task 8), trip (task 7). Unknown kinds on write are 422. In one transaction: insert the message with sequence from conversations.last_sequence (row lock), update conversation activity, apply the request rule from task 4, and write the event (task 11). A repeat of the same id with the same body returns 200 with the stored message; with a different body 409.\n- A message to a person who blocked the sender succeeds from the sender's side (201/200, stored with the sender's view) and is never delivered: no event, no unread, no push (task 9). The response must not differ.\n- While the conversation is a request for the recipient, enforce N messages before acceptance (task 1) with 422 request_limit_reached.\n- GET .../messages?limit&cursor: newest first; nextCursor goes back in time; a participant sees the other's messages unless blocked; an opaque cursor built on sequence. Response includes reactions in the shape task 1 chose and unsent handling (removal vs tombstone).\n- 413 when the request body exceeds the cap; 429 with Retry-After from task 12.\nSequence must be strictly increasing and gap-free per conversation (the app detects a missed event by a hole), including under concurrent sends and after a retried request.",
+        "testStrategy": "pglite repo tests: 20 concurrent sends to one conversation produce sequences 1..20 with no duplicate or gap; the same message id sent twice stores one row and returns the same sequence; same id different body is 409; 4,001 characters is 422 text_too_long; history paging returns every message exactly once while new messages arrive; a non-participant gets 404; a blocked sender cannot tell the difference (task 9 adds the assertion). Route tests for status codes and the error envelope.",
+        "priority": "high",
+        "dependencies": [4],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 6,
+        "title": "Unsend and reactions",
+        "description": "DELETE a message of mine, and PUT/DELETE my reaction on a message.",
+        "details": "Layer: repo + routes + events.\n- DELETE .../messages/{messageId}: only the sender (403 otherwise, 404 for a non-participant); 204; idempotent for an already removed message. Behaviour is removal or tombstone per task 1: removal emits message_removed, a tombstone emits message_updated with unsent true and no content. Reactions on it go with it. Report evidence (task 10) is a copy and survives.\n- PUT .../messages/{messageId}/reaction { emoji }: sets the caller's reaction, replacing the previous one; one per person per message. Validate that emoji is exactly one emoji grapheme cluster (Intl.Segmenter plus an emoji property check, including ZWJ sequences and skin tones; reject plain text and several emoji) with 422 otherwise. Emits reaction_changed.\n- DELETE .../reaction: idempotent removal of mine; emits reaction_changed with emoji null.\n- Reactions on a message from a person who blocked me are not delivered to them (task 9).",
+        "testStrategy": "Tests: unsend by a non-sender is 403; unsending twice is 204 both times; a removed message disappears from history (or becomes a tombstone as decided) and its reactions are gone; setting a second emoji replaces the first; accepted graphemes (👍, 👨‍👩‍👧, 👍🏽) and rejected ones ('a', '👍👍', '') are covered by a table test; reaction on a missing message is 404.",
+        "priority": "medium",
+        "dependencies": [5],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "Shared trip as a message: snapshot validation and storage",
+        "description": "Accept Content.kind 'trip' with a validated, size-capped, read-only TripDocument snapshot.",
+        "details": "Layer: src/schemas/trip.ts reuse, src/schemas/chat.ts, send path of task 5.\nThe snapshot is the trip as the app built it, in the stored TripDocument format with its own schemaVersion. The server validates it with the existing trip schema for the declared version (today only schemaVersion 1; others 422 snapshot_invalid), enforces the size cap from task 1 (proposal 256 KB; 413 snapshot_too_large) and stores it as jsonb inside the message. Optional title beside it. It must be fully independent: no reference to the sender's trip row, no access grant, and editing or deleting the sender's trip never changes it (add a test that proves this). Return it unchanged on read. Do not 'open' it on the server: the receiver saves a copy through the existing POST /v1/trips. Reuse the trip schema rather than copying it so a future schemaVersion upgrade (backlog item 6) is made in one place; note in the backlog entry that chat snapshots must keep being accepted for old versions.",
+        "testStrategy": "A valid v1 snapshot is stored and returned byte-for-byte equal; schemaVersion 2 is 422 snapshot_invalid; a snapshot over the cap is 413 snapshot_too_large; a snapshot with an invalid destination is 422; deleting or editing the source trip leaves the message identical; the message has no foreign key to trips.",
+        "priority": "medium",
+        "dependencies": [5],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 8,
+        "title": "Media: upload tickets, completion, thumbnails, fresh URLs, cleanup",
+        "description": "POST /v1/chat/media, POST .../complete, GET /v1/chat/media/{id}, and image/video messages that reference a mediaId.",
+        "details": "Layer: src/repo/chatMedia.ts, src/routes/chat (media), a storage adapter behind an interface (src/storage) so tests use a fake and the host can change.\n- POST /v1/chat/media { kind, contentType, bytes, width, height, durationSeconds? }: validate against the limits from task 1 (types, byte caps, video duration; 413/422 with the limits stated in the response body so the app can show them). Create a chat_media row (status pending, expires_at a few hours out) and return { mediaId, upload: { url, method, headers, expiresAt } } where url is a short-lived signed PUT URL to private object storage (Supabase Storage is the natural fit: same vendor, signed upload URLs).\n- POST /v1/chat/media/{mediaId}/complete: verify the object exists with the declared type and size (re-check; never trust the client), read dimensions and duration, create the thumbnail and the placeholder (blurhash or dominant colour). Thumbnail and video-frame work does not fit a short serverless function well: decide with task 1 whether it runs in a background job, an image-transform feature of the storage vendor, or the app uploads the thumbnail itself. Returns MediaRef { id, width, height, durationSeconds, bytes, thumbnailUrl, url, urlExpiresAt, placeholder }.\n- GET /v1/chat/media/{mediaId}: a fresh signed url and thumbnailUrl, only for a participant of a conversation that contains the media (or the uploader before it is attached); 404/410 if removed.\n- A media id may be used in exactly one message, only by its uploader, within the window; sending checks all three (422 media_not_usable). Unused uploads are deleted by a cleanup job (a scheduled route called by Vercel Cron, or a database function), with the object removed too.\n- Scanning hook: a status 'removed' makes GET return 404/410 and turns the message content into { kind: 'removed' } with a message_updated event (so the app shows 'This content was removed'). Implement the hook and the state; the scanner itself is task 16.\nSigned URLs are never logged and never returned to non-participants.",
+        "testStrategy": "With a fake storage adapter: a ticket is refused for an over-limit size, a disallowed type, and a 61 s video; complete refuses a missing or mismatched object; GET refreshes URLs for a participant and gives 404 to a stranger; media cannot be attached twice, by another person, or after expiry; cleanup deletes expired pending media and its objects; removal turns the message into kind 'removed' and emits message_updated. No test touches real storage.",
+        "priority": "high",
+        "dependencies": [5],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 9,
+        "title": "Blocking: block, unblock, list, and silent non-delivery",
+        "description": "PUT/DELETE /v1/chat/blocks/{personId}, GET /v1/chat/blocks, and the delivery rules a block creates.",
+        "details": "Layer: repo + routes, and a single 'can A reach B' function used by every other chat path so the rules cannot drift.\n- PUT /v1/chat/blocks/{personId}: idempotent; sets the block, hides our conversation from the blocker's list (conversation keeps its history; unblocking brings it back), ends any pending request from the blocked person. DELETE unblocks. GET lists blocked people with cursor paging, newest first.\n- The blocked person is never told: their sends return the same success as before, with a stored message that is simply never delivered (no event, no unread count, no push, no read position change); their lookup of the blocker's handle is 404; their reactions are not delivered; their create-or-get of a conversation behaves as if it worked.\n- The blocker no longer receives anything from the blocked person but history is kept for report evidence.\n- Blocking yourself is 422. Unknown person is 404.\n- Make the 'blocked' check part of the same transaction as the write it governs so a block that races a send is consistent.\nThe sender's own view of their conversation after being blocked keeps working (sent, no seen).",
+        "testStrategy": "Black-box test pairs: after A blocks B, B's send gets the same status and body shape as an unblocked send; A receives no event and A's unread does not change; B's handle lookup of A is 404 and indistinguishable from a missing handle; A's conversation list excludes the thread; unblock restores it with history; block is idempotent; a block racing a send never leaves the message delivered after the block committed.",
+        "priority": "high",
+        "dependencies": [5],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 10,
+        "title": "Reports: POST /v1/chat/reports with preserved evidence",
+        "description": "Let a person report a message or a person, keeping the content as evidence even after unsend.",
+        "details": "Layer: repo + route + operator tooling (src/routes/admin.ts already exists for private operator endpoints; follow its auth).\n- POST /v1/chat/reports { target: {type:'message', conversationId, messageId} | {type:'person', personId}, reason: spam|harassment|hate|violence|sexual_content|self_harm|illegal|other, note? (max 500) } returns 202. The reporter must be a participant of the conversation for a message target; a person target needs a prior shared conversation or a handle lookup (decide and document, so reports cannot be used to probe accounts).\n- Copy the reported message (and, for context, the few messages around it) and any media keys into reports.evidence at report time; evidence is never deleted by unsend, account deletion rules from task 1 apply to it explicitly.\n- Operator side (not an app call): list open reports, view evidence, mark reviewed, remove a message or media (feeds the 'removed' state of task 8), suspend an account. Start with admin endpoints guarded like the existing operator export, plus a documented runbook; the response-time commitment and the person who answers come from task 1.\n- Rate-limit reports per person per day (task 12).",
+        "testStrategy": "Report of a message stores a copy; the sender then unsends, and the evidence still holds the original; non-participant reporting a message is 404; invalid reason is 422; 501-character note is 422; the operator endpoints reject a normal user token and work with the operator credential; removing reported media makes GET media 404/410.",
+        "priority": "high",
+        "dependencies": [5, 8, 9],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 11,
+        "title": "Live events: event log, cursor, catch-up, resync and transport",
+        "description": "One ordered event stream per person with resume from a cursor, delivered by the transport chosen in task 1.",
+        "details": "Layer: db (chat_events table), src/repo/chatEvents.ts, src/routes/chat (events), plus the transport adapter.\nPart A (transport independent, do first): an append-only chat_events(cursor bigint identity, person_id, type, payload jsonb, created_at) table written in the same transaction as the change that causes it, one row per recipient (message_created for both people including the sender's echo with the same message id, message_removed, message_updated, reaction_changed, read_changed, conversation_changed, resync). Cursors increase monotonically per person. GET /v1/chat/events?after=<cursor>&limit= returns the events the caller missed (REST catch-up; works on any host and is what the app uses when it returns to the foreground). If 'after' is older than the retention window (task 1, at least 24 h or 1,000 events), answer with a single { type: 'resync' }. Events for a blocked sender are never written (task 9). Prune old events with a scheduled job.\nPart B (depends on the task 1 decision): the live connection. If Supabase Realtime, publish each event to the recipient's private channel (authorization on the channel by user id, token re-checked on each reconnect, heartbeat from the vendor) and document the subscription contract in openapi/README. If SSE or WebSocket on a long-lived host, add GET /v1/chat/stream with Last-Event-ID or ?after=, heartbeat comments every 20-30 s, bearer re-check on every connect, and one stream per person. Delivery is at least once; events are de-duplicable by id and sequence. Unknown event types are the client's problem, so the server may add new ones without a version bump.",
+        "testStrategy": "Part A on pglite: two people exchange messages and each event list is complete, ordered and echoes the sender's message with the same id; reading 'after' the last cursor returns nothing; an old cursor returns resync; a block suppresses events; events are written atomically with the change (a rolled-back send leaves no event). Part B: connect, receive an event, drop, reconnect with the last cursor and receive exactly the missed ones; an expired token is refused on reconnect; a heartbeat arrives in a quiet stream.",
+        "priority": "high",
+        "dependencies": [1, 5],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 12,
+        "title": "Rate limits and abuse protection for chat",
+        "description": "Per-person limits for sends, uploads, lookups, availability checks and reports, with 429 and Retry-After.",
+        "details": "Layer: src/http (a small limiter) backed by Postgres counters (a fixed or sliding window table) so it works across serverless instances; Vercel firewall rules do not know the person. Numbers to propose and record in task 1: messages per person per minute, media tickets per hour, handle lookups per minute (anti-scraping), availability checks per minute, reports per day, request-stage messages to one stranger. Return 429 with a Retry-After header and the standard error envelope (code rate_limited). Keep the limiter behind an interface so a faster store can replace it. Limits are config (env or a constants file) not scattered literals. Document the limits in openapi.yaml descriptions and the README, and note in docs/backlog.md that the global Vercel-level limiting (item 13) is still separate.",
+        "testStrategy": "Unit tests with a fake clock: the limit trips on the N+1th call, Retry-After is the seconds until the window opens, the window resets, limits are per person (A's calls never count against B); a route test shows the 429 envelope and header on messages, lookup, media and reports.",
+        "priority": "medium",
+        "dependencies": [3, 5],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 13,
+        "title": "Account deletion and export cover chat data",
+        "description": "DELETE /v1/me and the operator export remove or include handle, messages, reactions, media, devices and reports as decided.",
+        "details": "Layer: src/repo/users.ts, src/repo/export.ts, the Apple-token revoke flow stays as is.\nDELETE /v1/me must also delete the person's chat profile and handle, their messages and reactions (or anonymise, as task 1 decides for messages other people still hold), their uploaded media (database rows and storage objects), their blocks, and their device tokens, and mark conversations so the other person sees 'this person deleted their account'. Reports about or by them follow the retention rule recorded in task 1. Do it in one transaction for rows and a retry-safe step for storage objects (a failed storage delete must not leave the account half deleted: record the keys, delete, and clean up leftovers in the scheduled job). Emit conversation_changed to the other person. The export (private operator endpoint) includes the new tables. DELETE /v1/me stays idempotent (see docs/ios-account-answers.md). Update docs/legal data inventory and the privacy draft (chat content, media, retention, not end-to-end encrypted) and re-run npm run legal:check.",
+        "testStrategy": "Repo tests: after deletion no row anywhere references the user (a generic check over every chat table); the other person's conversation shows the deleted state; media rows are gone and the fake storage records deletes; a second DELETE /v1/me is still a success; an export of a user with chat data contains it; deleting a user who blocked or reported someone does not break the other side.",
+        "priority": "high",
+        "dependencies": [2, 8, 10],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 14,
+        "title": "Chat push notifications through the device registry",
+        "description": "Send an APNs push for a new message when the conversation is accepted, not blocked, not muted and the recipient is not connected.",
+        "details": "Deferred until the push-notifications work on the API side exists (the app's push requirements define PUT/DELETE /v1/me/devices/{installId} and an APNs sender); do not build a second device table or a second sender. Reuse that registry and sender, and add only the chat rules here. A new message triggers a push only when: the conversation is accepted for the recipient, the sender is not blocked, the thread is not muted (if mute exists in v1, task 1), and the recipient has no live connection (or per the policy chosen in task 1). Payload: sender display name plus the kind ('sent a photo', 'sent a video', 'shared a trip'); the text only when settings.notificationPreviews is true (add that setting to PATCH /v1/chat/me); no media in the payload; conversationId and messageId so a tap opens the thread; badge is the unread total over accepted conversations. A guest has no token and receives nothing. Requests never push. Failed pushes are not retried by the chat code; invalid-token cleanup belongs to the device registry.",
+        "testStrategy": "With a fake APNs sender: an accepted, unblocked, connected-elsewhere-false conversation produces one push with the right payload; request, blocked, muted and connected cases produce none; previews off carries no text; the badge counts accepted conversations only; a message to a person with no device registered sends nothing and does not fail the send.",
+        "priority": "low",
+        "dependencies": [3, 5, 11],
+        "status": "deferred",
+        "subtasks": []
+      },
+      {
+        "id": 15,
+        "title": "OpenAPI, Bruno collection, README and contract tests for chat",
+        "description": "Publish the contract the app pins, regenerate the client files, and extend the black-box suite.",
+        "details": "Layer: openapi.yaml (generated), bruno/ (generated), README, test/api. Every chat route is declared with zod-openapi so npm run openapi regenerates the spec; bump the spec version (0.2.0, minor, additive) and describe the unknown-value rules (clients ignore unknown enum values and event kinds). Run npm run openapi, npm run collection, then the :check scripts. README: new chat section (endpoints, limits, event transport and how to subscribe, media flow, env variables for storage and any realtime keys) and every new script or env var, same change (project rule). Update docs/backlog.md: move done items out and add what remains (scanning vendor, moderation staffing, retention job). Extend test/api/contract.test.ts (the black-box suite that runs against a deployed environment) with: handle choose and lookup, conversation create, send and read history, reaction, unsend, block silent-failure, report 202. Tell the app team the new spec commit so they can pin it (their task chat/3), and note any difference from their proposal.",
+        "testStrategy": "npm run openapi:check and npm run collection:check pass; the contract suite passes against the local server and the Vercel environment; the Bruno collection runs the chat happy path; npm run build, lint and test are green.",
+        "priority": "high",
+        "dependencies": [3, 4, 5, 6, 7, 8, 9, 10, 11],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 16,
+        "title": "Moderation, scanning and legal readiness before release",
+        "description": "Everything chat needs before real users send photos and videos: scanning, a review process, and App Review Guideline 1.2.",
+        "details": "Not code only; the user has to decide parts. (1) Upload scanning: malware, and known-illegal-content matching (a hash-matching service or the storage vendor's feature); wire it into the media 'complete' step so an item is not delivered until it passes, and into the 'removed' state of task 8. (2) A runbook for reports: who looks, how fast, what to do for illegal content, who files any legal report, how an account is suspended (extends task 10's operator endpoints). (3) A published support contact the app can link. (4) Privacy policy and terms updates for chat (messages and media are stored, not end-to-end encrypted, retention, deletion, reporting) in docs/legal, then a lawyer's review before npm run legal publishes them. (5) Remind the user: Pro plans for Vercel and Supabase (storage size, bandwidth, Realtime connections) before launch. This task is a gate: chat does not ship to real users until it is done.",
+        "testStrategy": "Checklist review with the user: each item has an owner and a written answer; an end-to-end run with a test file that the scanner rejects ends in a 'removed' message; a test report goes through the runbook once.",
+        "priority": "high",
+        "dependencies": [1, 8, 10],
+        "status": "pending",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2026-11-26T00:00:00.000Z",
+      "updated": "2026-11-26T00:00:00.000Z",
+      "description": "Build the chat (messages) service from the app team's proposal: docs/features/chat-api-proposal.md in blackbird-house/imontour, branch chore/chat-api-proposal."
+    }
+  }
+}
