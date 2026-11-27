@@ -183,5 +183,69 @@
       "updated": "2026-11-26T00:00:00.000Z",
       "description": "Build the chat (messages) service from the app team's proposal: docs/features/chat-api-proposal.md in blackbird-house/imontour, branch chore/chat-api-proposal."
     }
+  },
+  "push": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Devices table and repository",
+        "description": "Migration 004 for the devices table (RLS on, cascade with the user), zod schemas, DeviceRepo and the shared push types.",
+        "details": "Plan: docs/superpowers/plans/2026-11-26-push-devices.md, Task 1 (steps, interfaces and test names are there; this card only points at it). Spec: docs/superpowers/specs/2026-11-26-push-devices-design.md. Work on branch feat/push-devices, commit locally after the task, do not push or open a PR until asked. Files: db/migrations/004_devices.sql, src/schemas/device.ts, src/repo/devices.ts, src/push/types.ts; export LOCALE from src/schemas/user.ts. Upsert in one transaction; a second user PUTting an installId moves it; keep at most 20 devices per user, never dropping the row just written.",
+        "testStrategy": "npx vitest run test/repo/devices.test.ts test/db/migrate.test.ts (tests written first, listed in the plan).",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 2,
+        "title": "APNs sender",
+        "description": "PushSender over node:http2 with an ES256 provider token (jose), replaceable transport, result classification.",
+        "details": "Plan: docs/superpowers/plans/2026-11-26-push-devices.md, Task 2 (steps, interfaces and test names are there; this card only points at it). Spec: docs/superpowers/specs/2026-11-26-push-devices-design.md. Work on branch feat/push-devices, commit locally after the task, do not push or open a PR until asked. Files: src/push/apns.ts. Sandbox vs production host by token environment; provider token cached 50 minutes; 410 and BadDeviceToken/DeviceTokenNotForTopic mean token_invalid; a transport error is failed, never a rejection. No new npm dependencies. Never log a device token.",
+        "testStrategy": "npx vitest run test/push/apns.test.ts against a fake transport.",
+        "priority": "medium",
+        "dependencies": [1],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "Config, wiring and the device endpoints",
+        "description": "APNS_* env group, Deps wiring, PUT and DELETE /v1/me/devices/{installId}.",
+        "details": "Plan: docs/superpowers/plans/2026-11-26-push-devices.md, Task 3 (steps, interfaces and test names are there; this card only points at it). Spec: docs/superpowers/specs/2026-11-26-push-devices-design.md. Work on branch feat/push-devices, commit locally after the task, do not push or open a PR until asked. Files: src/env.ts, src/deps.ts, src/app.ts, src/openapi.ts, src/routes/devices.ts, test helpers, four env/*.env.example. APNS_TEAM_ID, APNS_KEY_ID, APNS_PRIVATE_KEY, APNS_TOPIC all or none. PUT answers 200, DELETE always 204; 422 names the field. Auth middleware and body limit move to /v1/me/*.",
+        "testStrategy": "npx vitest run test/routes test/env.test.ts test/env.examples.test.ts, then npm run build and npm run lint.",
+        "priority": "medium",
+        "dependencies": [2],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "Test push route",
+        "description": "POST /v1/me/devices/{installId}/test, off (404) when APP_ENV=prod.",
+        "details": "Plan: docs/superpowers/plans/2026-11-26-push-devices.md, Task 4 (steps, interfaces and test names are there; this card only points at it). Spec: docs/superpowers/specs/2026-11-26-push-devices-design.md. Work on branch feat/push-devices, commit locally after the task, do not push or open a PR until asked. File: src/routes/devices.ts. Check order: route disabled 404, device lookup 404, sender configured 503, then send. A dead token removes the record and answers 409; a failed or throwing sender is 502, never 500. Literal text only, no trip content.",
+        "testStrategy": "npx vitest run test/routes/devices.test.ts, then npm run build and npm run lint.",
+        "priority": "medium",
+        "dependencies": [3],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "Contract, generated files and docs",
+        "description": "OpenAPI, Bruno collection, contract tests, README, legal data inventory and privacy labels for devices.",
+        "details": "Plan: docs/superpowers/plans/2026-11-26-push-devices.md, Task 5 (steps, interfaces and test names are there; this card only points at it). Spec: docs/superpowers/specs/2026-11-26-push-devices-design.md. Work on branch feat/push-devices, commit locally after the task, do not push or open a PR until asked. Files: src/collection.ts (EXAMPLES for putDevice, deleteDevice, testDevicePush; installId sample path), test/openapi.test.ts, test/api/contract.test.ts, README.md (new Push notifications section, APNS_* variables, Apple Developer portal needs, test route off in prod), docs/legal/data-inventory.md, docs/legal/app-store-privacy-labels.md. Regenerate openapi.yaml and bruno/. Mark stage 1 implemented in the spec header.",
+        "testStrategy": "npm run format && npm test && npm run build && npm run lint && npm run openapi:check && npm run collection:check",
+        "priority": "medium",
+        "dependencies": [4],
+        "status": "pending",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2026-11-27T00:00:00.000Z",
+      "updated": "2026-11-27T00:00:00.000Z",
+      "description": "Push notifications stage 1: device registry, APNs sender and test push. Plan: docs/superpowers/plans/2026-11-26-push-devices.md"
+    }
   }
 }
